@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import Link from 'next/link'
 import { Copy, Check, RotateCcw, ChevronLeft, ChevronRight, AlertCircle, AlertTriangle } from 'lucide-react'
 import clsx from 'clsx'
 import { FormState, defaultFormState } from '@/lib/types'
@@ -1033,6 +1034,13 @@ export default function PraeopEval() {
               </p>
             </div>
           </>}
+
+          {/* Copyright footer */}
+          <div className="border-t border-slate-200 pt-4 mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-slate-400">
+            <span>© {new Date().getFullYear()} Die Notfallakademie UG (haftungsbeschränkt)</span>
+            <Link href="/impressum" className="hover:text-blue-600 transition-colors">Impressum</Link>
+            <Link href="/datenschutz" className="hover:text-blue-600 transition-colors">Datenschutz</Link>
+          </div>
 
         </div>
       </div>
