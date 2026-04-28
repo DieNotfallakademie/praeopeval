@@ -30,6 +30,9 @@ export default function Datenschutz() {
             <p className="font-bold text-slate-900">Die Notfallakademie UG (haftungsbeschränkt)</p>
             <p>Europaallee 33</p>
             <p>67657 Kaiserslautern</p>
+            <p>Registergericht: Amtsgericht Charlottenburg (Berlin), HRB 34226</p>
+            <p>Geschäftsführer: Fabian Schmidt</p>
+            <p>Telefon: <a href="tel:+4903028670692" className="text-blue-600 hover:underline">030 2867 0692</a></p>
             <p>E-Mail: <a href="mailto:admin@notfallakademie.org" className="text-blue-600 hover:underline">admin@notfallakademie.org</a></p>
             <p>Web: <a href="https://notfallakademie.org" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">notfallakademie.org</a></p>
           </div>
@@ -122,10 +125,10 @@ export default function Datenschutz() {
           </p>
           <p className="text-sm text-slate-700">
             Beschwerden können an die zuständige Datenschutz-Aufsichtsbehörde gerichtet werden.
-            In Rheinland-Pfalz ist dies der{' '}
-            <a href="https://www.datenschutz.rlp.de" target="_blank" rel="noopener noreferrer"
+            Für in Berlin ansässige Unternehmen ist dies:{' '}
+            <a href="https://www.datenschutz-berlin.de" target="_blank" rel="noopener noreferrer"
               className="text-blue-600 hover:underline">
-              Landesbeauftragte für den Datenschutz und die Informationsfreiheit Rheinland-Pfalz
+              Berliner Beauftragte für Datenschutz und Informationsfreiheit
             </a>.
           </p>
         </section>

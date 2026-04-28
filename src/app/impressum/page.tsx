@@ -39,13 +39,10 @@ export default function Impressum() {
             </p>
             <p>
               <span className="font-medium">Registergericht:</span>{' '}
-              Amtsgericht Kaiserslautern
+              Amtsgericht Charlottenburg (Berlin)
             </p>
             <p>
-              <span className="font-medium">Registernummer:</span>{' '}
-              <span className="bg-amber-100 text-amber-800 px-1 rounded text-xs">
-                [HRB-Nummer eintragen]
-              </span>
+              <span className="font-medium">Registernummer:</span> HRB 34226
             </p>
             <p>
               <span className="font-medium">USt-IdNr.:</span>{' '}
@@ -57,9 +54,9 @@ export default function Impressum() {
           <div className="text-sm text-slate-700 space-y-1 pt-3 border-t border-slate-100">
             <p>
               <span className="font-medium">Telefon:</span>{' '}
-              <span className="bg-amber-100 text-amber-800 px-1 rounded text-xs">
-                [Telefonnummer eintragen]
-              </span>
+              <a href="tel:+4903028670692" className="hover:text-blue-600 transition-colors">
+                030 2867 0692
+              </a>
             </p>
             <p>
               <span className="font-medium">E-Mail:</span>{' '}
@@ -86,14 +83,12 @@ export default function Impressum() {
             <p><span className="font-medium">Berufsbezeichnung des Geschäftsführers:</span> Arzt (verliehen in der Bundesrepublik Deutschland)</p>
             <p>
               <span className="font-medium">Zuständige Ärztekammer:</span>{' '}
-              <span className="bg-amber-100 text-amber-800 px-1 rounded text-xs">
-                [Ärztekammer des Bundeslandes eintragen, z.B. Landesärztekammer Rheinland-Pfalz]
-              </span>
+              Ärztekammer Berlin
             </p>
             <p>
               <span className="font-medium">Berufsrechtliche Regelungen:</span>{' '}
-              Berufsordnung der zuständigen Ärztekammer sowie die einschlägigen Bestimmungen
-              des Heilberufsgesetzes Rheinland-Pfalz. Abrufbar unter:{' '}
+              Berufsordnung der Ärztekammer Berlin sowie die einschlägigen Bestimmungen
+              des Berliner Kammergesetzes für die Heilberufe (BlnKaG). Abrufbar unter:{' '}
               <a href="https://www.bundesaerztekammer.de" target="_blank" rel="noopener noreferrer"
                 className="text-blue-600 hover:underline">www.bundesaerztekammer.de</a>.
             </p>
