@@ -718,6 +718,92 @@ export const MEDICATIONS: Medication[] = [
     renalNote: 'Keine Dosisanpassung bei Niereninsuffizienz.',
   },
 
+  // ── ADHS-Medikamente ─────────────────────────────────────────────────────────
+  {
+    id: 'lisdexamphetamin',
+    genericName: 'Lisdexamphetamin',
+    tradeNames: ['Elvanse', 'Vyvanse'],
+    drugClass: 'ADHS-Medikament / Amphetamin-Derivat',
+    urgency: 'pause',
+    perioperativeManagement:
+      'Am Operationstag pausieren. Amphetamine können sympathomimetische Effekte verstärken und mit Vasopressoren sowie Anästhetika interagieren (Hypertonie, Tachykardie). MAO-Hemmer kontraindiziert. Herz-Kreislauf-Monitoring perioperativ sicherstellen. Abruptes Absetzen kann Rebound-Erschöpfung und Dysphorie auslösen — kurze perioperative Pause in der Regel gut toleriert. Rücksprache mit verschreibendem Arzt bei Langzeittherapie.',
+    renalNote: 'Bei GFR <30: Vorsicht, Dosis individuell anpassen (renale Elimination des aktiven Metaboliten Dexamphetamin).',
+  },
+  {
+    id: 'methylphenidat',
+    genericName: 'Methylphenidat',
+    tradeNames: ['Ritalin', 'Ritalin LA', 'Medikinet', 'Medikinet adult', 'Concerta', 'Rubifen'],
+    drugClass: 'ADHS-Medikament / Dopamin-/Noradrenalin-Wiederaufnahmehemmer',
+    urgency: 'pause',
+    perioperativeManagement:
+      'Am Operationstag pausieren. Sympathomimetische Wirkung kann Vasopressoren-Bedarf verändern und Herzrate/Blutdruck erhöhen. MAO-Hemmer-Kombination kontraindiziert (hypertensive Krise). Anästhesist über Einnahme informieren. Kurze perioperative Pause in der Regel gut verträglich.',
+    renalNote: 'Keine spezifische renale Dosisanpassung; bei fortgeschrittener Niereninsuffizienz Vorsicht.',
+  },
+  {
+    id: 'atomoxetin',
+    genericName: 'Atomoxetin',
+    tradeNames: ['Strattera'],
+    drugClass: 'ADHS-Medikament / Noradrenalin-Wiederaufnahmehemmer (NRI)',
+    urgency: 'caution',
+    perioperativeManagement:
+      'Weiterführen oder am OP-Tag pausieren — individuelle Entscheidung. Kein Amphetamin-Derivat, daher geringeres Interaktionsrisiko als Methylphenidat/Lisdexamphetamin. Dennoch Noradrenalin-Reuptake-Hemmung: erhöhte Herzrate und Blutdruck möglich. Anästhesist informieren.',
+    renalNote: 'Keine spezifische Dosisanpassung bei Niereninsuffizienz (vorwiegend hepatische Metabolisierung).',
+  },
+
+  // ── Weitere Antidepressiva ────────────────────────────────────────────────────
+  {
+    id: 'duloxetin',
+    genericName: 'Duloxetin',
+    tradeNames: ['Cymbalta', 'Duloxetin-ratiopharm'],
+    drugClass: 'SNRI (Serotonin-Noradrenalin-Wiederaufnahmehemmer)',
+    urgency: 'continue',
+    perioperativeManagement:
+      'Weiterführen. Ähnliches Profil wie Venlafaxin: erhöhtes Blutungsrisiko (Thrombozytenserotonin-Depletion), Blutdruckanstieg unter Stress. Abruptes Absetzen vermeiden (Absetzsyndrom). Serotoninsyndrom-Risiko bei Kombination mit Tramadol, Pethidin, Linezolid, Methylenblau.',
+    renalNote: 'Bei GFR <30: kontraindiziert (Metaboliten-Akkumulation).',
+  },
+  {
+    id: 'mirtazapin',
+    genericName: 'Mirtazapin',
+    tradeNames: ['Remergil', 'Mirtazapin-ratiopharm'],
+    drugClass: 'Noradrenerges und spezifisch serotonerges Antidepressivum (NaSSA)',
+    urgency: 'continue',
+    perioperativeManagement:
+      'Weiterführen. Sedierender Effekt beachten — kann Anästhetika-Bedarf reduzieren. Antiemetische Wirkung (5-HT3-Antagonismus) von Vorteil. Kein Absetzsyndrom bei kurzer Pause, aber Kontinuität bevorzugen. QTc-Verlängerung möglich.',
+    renalNote: 'Bei GFR <30: Clearance reduziert, Dosis individuell anpassen.',
+  },
+
+  // ── Opioide ──────────────────────────────────────────────────────────────────
+  {
+    id: 'tramadol',
+    genericName: 'Tramadol',
+    tradeNames: ['Tramal', 'Tramadol-ratiopharm', 'Jutadol'],
+    drugClass: 'Schwaches Opioid / Monoamin-Wiederaufnahmehemmer',
+    urgency: 'caution',
+    perioperativeManagement:
+      '⚠ Serotoninsyndrom-Risiko bei Kombination mit SSRI, SNRI, MAO-Hemmern, TCA, Triptanen — Kombination vermeiden. Am OP-Tag individuell: bei chronischer Schmerztherapie Rücksprache mit Schmerzdienst. Krampfschwelle senkt bei Epilepsie. Perioperativ auf alternative Analgetika umstellen (z.B. Oxycodon, Morphin) wenn SSRI vorhanden.',
+    renalNote: 'Bei GFR <30: Dosisreduktion und verlängertes Dosierungsintervall (renale Metaboliten-Akkumulation).',
+  },
+  {
+    id: 'morphin',
+    genericName: 'Morphin',
+    tradeNames: ['MST Mundipharma', 'Sevredol', 'Morphin-ratiopharm', 'Capros'],
+    drugClass: 'Starkes Opioid (µ-Rezeptor-Agonist)',
+    urgency: 'continue',
+    perioperativeManagement:
+      'Weiterführen (Opioid-Dauertherapie nicht abrupt absetzen — Entzug und Hyperalgesie). Perioperativer Schmerzdienst einbinden. Äquianalgetische Umrechnung perioperativ beachten. Opioid-tolerante Patienten benötigen höhere Dosen — Schmerztherapie individuell anpassen. Bei parenteralem Regime: Umstellung auf i.v./s.c. Morphin.',
+    renalNote: '⚠ Aktiver Metabolit Morphin-6-Glucuronid renal eliminiert! Bei GFR <30: starke Akkumulation möglich → Sedierung, Atemdepression. Dosisreduktion oder Wechsel auf Hydromorphon (sicherer bei Niereninsuffizienz).',
+  },
+  {
+    id: 'oxycodon',
+    genericName: 'Oxycodon',
+    tradeNames: ['Oxygesic', 'Targin (+ Naloxon)', 'Oxycodon-ratiopharm'],
+    drugClass: 'Starkes Opioid (µ-/κ-Rezeptor-Agonist)',
+    urgency: 'continue',
+    perioperativeManagement:
+      'Weiterführen (Opioid-Dauertherapie). Perioperativen Schmerzdienst einbinden. Bei NPO: äquianalgetische Umstellung auf i.v.-Opioid. Opioid-tolerante Patienten haben erhöhten intra- und postoperativen Opioidbedarf.',
+    renalNote: 'Bei GFR <30: Vorsicht (Metaboliten-Akkumulation, Sedierung). Dosisreduktion und engmaschiges Monitoring.',
+  },
+
   // ── PDE-5-Hemmer ─────────────────────────────────────────────────────────────
   {
     id: 'sildenafil',
