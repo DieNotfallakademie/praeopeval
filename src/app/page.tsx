@@ -700,13 +700,36 @@ export default function PraeopEval() {
             <SecHeader title="Reflux / GERD / Aspirationsrisiko" color="amber" />
             <div className="space-y-2">
               <CheckRow label="Sodbrennen / bekannte GERD" checked={form.reflux_heartburn}
-                onChange={v => set('reflux_heartburn', v)} />
-              <CheckRow label="Reflux im Flachliegen" checked={form.reflux_atRest}
-                onChange={v => set('reflux_atRest', v)} warn
-                description="Erhöhtes Aspirationsrisiko → Gelbe Nüchternheitskarte" />
-              <CheckRow label="Regurgitation (spontaner Rückfluss)" checked={form.reflux_regurgitation}
-                onChange={v => set('reflux_regurgitation', v)} warn
-                description="Erhöhtes Aspirationsrisiko" />
+                onChange={v => set('reflux_heartburn', v)}
+                description="Ja → Bitte folgende Fragen beantworten" />
+              {form.reflux_heartburn && (
+                <div className="pl-4 border-l-2 border-amber-200 space-y-2">
+                  <CheckRow label="Auch unabhängig von Mahlzeiten / in Ruhe?"
+                    checked={form.reflux_mealIndependent}
+                    onChange={v => set('reflux_mealIndependent', v)} warn
+                    description="Nahrungsunabhängiger Reflux → erhöhtes Aspirationsrisiko → Gelbe Karte" />
+                  <CheckRow label="Nächtliche Hustenanfälle oder Erwachen durch Reflux?"
+                    checked={form.reflux_nocturnalCough}
+                    onChange={v => set('reflux_nocturnalCough', v)} warn
+                    description="Nächtliche Symptome → erhöhtes Aspirationsrisiko → Gelbe Karte" />
+                  <CheckRow label="Reflux im Flachliegen (z. B. beim Umlagern)" checked={form.reflux_atRest}
+                    onChange={v => set('reflux_atRest', v)} warn
+                    description="Lageabhängiger Reflux → erhöhtes Aspirationsrisiko → Gelbe Karte" />
+                  <CheckRow label="Regurgitation (spontaner Rückfluss in Mund / Rachen)" checked={form.reflux_regurgitation}
+                    onChange={v => set('reflux_regurgitation', v)} warn
+                    description="Hohes Aspirationsrisiko → Gelbe Karte" />
+                </div>
+              )}
+              {!form.reflux_heartburn && (
+                <>
+                  <CheckRow label="Reflux im Flachliegen" checked={form.reflux_atRest}
+                    onChange={v => set('reflux_atRest', v)} warn
+                    description="Erhöhtes Aspirationsrisiko → Gelbe Nüchternheitskarte" />
+                  <CheckRow label="Regurgitation (spontaner Rückfluss)" checked={form.reflux_regurgitation}
+                    onChange={v => set('reflux_regurgitation', v)} warn
+                    description="Erhöhtes Aspirationsrisiko → Gelbe Nüchternheitskarte" />
+                </>
+              )}
             </div>
           </>}
 
@@ -910,6 +933,8 @@ export default function PraeopEval() {
                 { label: 'Notfall N0–N2', active: ['N0','N1','N2'].includes(form.emergencyClass), note: `${form.emergencyClass} → Rot`, color: 'text-red-700' },
                 { label: 'Notfall N3', active: form.emergencyClass === 'N3', note: 'N3 → Gelb', color: 'text-amber-700' },
                 { label: 'GLP-1-Agonist', active: form.hxGLP1, note: 'Ja → Gelb', color: 'text-amber-700' },
+                { label: 'Reflux mahlzeitenunabhängig', active: form.reflux_mealIndependent, note: 'Ja → Gelb', color: 'text-amber-700' },
+                { label: 'Nächtliche Hustenanfälle', active: form.reflux_nocturnalCough, note: 'Ja → Gelb', color: 'text-amber-700' },
                 { label: 'Reflux im Flachliegen', active: form.reflux_atRest, note: 'Ja → Gelb', color: 'text-amber-700' },
                 { label: 'Regurgitation', active: form.reflux_regurgitation, note: 'Ja → Gelb', color: 'text-amber-700' },
               ].map(({ label, active, note, color }) => (

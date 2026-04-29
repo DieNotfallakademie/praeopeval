@@ -265,7 +265,7 @@ export function determineFastingCard(f: FormState): FastingCard {
   const isEmergencyN0N2 = f.emergencyClass === 'N0' || f.emergencyClass === 'N1' || f.emergencyClass === 'N2'
   if (f.fast_ileus || f.fast_giObstruction || f.fast_abdominalEmergency || f.fast_pylorusStenosis || isEmergencyN0N2) return 'red'
   if (f.emergencyClass === 'N3' || f.hxGLP1 || f.fast_ileostomy || f.fast_endoscopy || f.fast_mrcp ||
-    f.reflux_atRest || f.reflux_regurgitation) return 'yellow'
+    f.reflux_atRest || f.reflux_regurgitation || f.reflux_mealIndependent || f.reflux_nocturnalCough) return 'yellow'
   return 'green'
 }
 
@@ -509,7 +509,9 @@ export function generateProtocolText(f: FormState): string {
   // Reflux — nur wenn positiv
   if (f.reflux_heartburn || f.reflux_atRest || f.reflux_regurgitation) {
     const rf = [
-      f.reflux_heartburn && 'Sodbrennen',
+      f.reflux_heartburn && 'Sodbrennen/GERD',
+      f.reflux_mealIndependent && 'mahlzeitenunabhängig',
+      f.reflux_nocturnalCough && 'nächtliche Hustenanfälle',
       f.reflux_atRest && 'Reflux im Flachliegen',
       f.reflux_regurgitation && 'Regurgitation',
     ].filter(Boolean)

@@ -57,6 +57,8 @@ export interface FormState {
 
   // ── Reflux / GERD ───────────────────────────────────────────────────────────
   reflux_heartburn: boolean
+  reflux_mealIndependent: boolean   // Reflux/Sodbrennen auch unabhängig von Mahlzeiten / in Ruhe
+  reflux_nocturnalCough: boolean    // Nächtliche Hustenanfälle oder Erwachen durch Reflux
   reflux_atRest: boolean
   reflux_regurgitation: boolean
 
@@ -159,7 +161,8 @@ export const defaultFormState: FormState = {
   aw_obese: false, aw_previousDifficult: false, aw_notes: '',
   nox_smoking: false, nox_cigPerDay: '', nox_smokingYears: '', nox_exSmoker: false,
   nox_exSmokerSince: '', nox_alcohol: false, nox_alcoholGPerWeek: '', nox_drugs: false, nox_drugsText: '',
-  reflux_heartburn: false, reflux_atRest: false, reflux_regurgitation: false,
+  reflux_heartburn: false, reflux_mealIndependent: false, reflux_nocturnalCough: false,
+  reflux_atRest: false, reflux_regurgitation: false,
   activeCardiac_unstableAngina: false, activeCardiac_recentMI: false,
   activeCardiac_decompHF: false, activeCardiac_arrhythmia: false,
   activeCardiac_severeStenosisAo: false, activeCardiac_severeMitralStenosis: false,
