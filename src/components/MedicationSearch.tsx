@@ -46,24 +46,31 @@ export default function MedicationSearch() {
 
       {/* Not found */}
       {noResults && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 space-y-2">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 space-y-3">
           <div className="flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-sm font-medium text-amber-800">
-                &quot;{query}&quot; nicht in der Datenbank gefunden
-              </p>
-              <p className="text-xs text-amber-700 mt-0.5">
-                Bitte melden Sie das Medikament, damit es aufgenommen werden kann.
-              </p>
-            </div>
+            <p className="text-sm font-medium text-amber-800">
+              &quot;{query}&quot; nicht in der Datenbank
+            </p>
+          </div>
+          <p className="text-xs text-amber-700 leading-relaxed">
+            Sende eine kurze E-Mail — das Medikament wird zeitnah ergänzt:
+          </p>
+          <div className="bg-white border border-amber-200 rounded-lg px-3 py-2.5 space-y-1">
+            <p className="text-xs text-slate-500 font-medium">An</p>
+            <p className="text-sm font-mono text-slate-800 select-all">admin@notfallakademie.org</p>
+            <p className="text-xs text-slate-500 font-medium mt-1.5">Betreff</p>
+            <p className="text-sm font-mono text-slate-800 select-all">Medikament: {query}</p>
           </div>
           <a
-            href={`mailto:admin@notfallakademie.org?subject=Medikament%20nicht%20gefunden%3A%20${encodeURIComponent(query)}&body=Hallo%2C%0A%0ADas%20Medikament%20%22${encodeURIComponent(query)}%22%20wurde%20in%20der%20pr%C3%A4operativen%20Evaluations-App%20nicht%20gefunden.%0A%0ABitte%20in%20die%20Datenbank%20aufnehmen.%0A%0ADanke`}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-800 bg-amber-200 hover:bg-amber-300 px-3 py-1.5 rounded-lg transition-colors"
+            href={`mailto:admin@notfallakademie.org?subject=${encodeURIComponent('Medikament: ' + query)}&body=${encodeURIComponent('Hallo,\n\ndas Medikament "' + query + '" fehlt in der präoperativen Evaluations-App.\n\nBitte aufnehmen.\n\nDanke')}`}
+            className="flex items-center justify-center gap-2 text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 px-4 py-2.5 rounded-xl transition-colors w-full"
           >
-            Medikament melden
+            E-Mail öffnen
           </a>
+          <p className="text-xs text-amber-600 text-center">
+            Kein E-Mail-Client? E-Mail-Adresse oben markieren und kopieren.
+          </p>
         </div>
       )}
 

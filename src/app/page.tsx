@@ -152,15 +152,9 @@ export default function PraeopEval() {
           <h1 className="text-base font-bold tracking-tight">Präoperative Evaluation</h1>
           <p className="text-blue-300 text-xs">ESC 2022 · DGAI 2024</p>
         </div>
-        <div className="flex items-center gap-1">
-          <a href="mailto:admin@notfallakademie.org?subject=Pr%C3%A4opEval%20Feedback&body=Mein%20Verbesserungsvorschlag%3A%0A%0A"
-            className="text-blue-300 hover:text-white transition-colors p-1" title="Feedback senden">
-            <MessageSquare className="w-4 h-4" />
-          </a>
-          <button onClick={reset} className="text-blue-300 hover:text-white transition-colors p-1" title="Neue Evaluation">
-            <RotateCcw className="w-4 h-4" />
-          </button>
-        </div>
+        <button onClick={reset} className="text-blue-300 hover:text-white transition-colors p-1" title="Neue Evaluation">
+          <RotateCcw className="w-4 h-4" />
+        </button>
       </header>
 
       {/* Progress bar */}
@@ -1064,10 +1058,21 @@ export default function PraeopEval() {
           </>}
 
           {/* Copyright footer */}
-          <div className="border-t border-slate-200 pt-4 mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-slate-400">
-            <span>© {new Date().getFullYear()} Die Notfallakademie UG (haftungsbeschränkt)</span>
-            <Link href="/impressum" className="hover:text-blue-600 transition-colors">Impressum</Link>
-            <Link href="/datenschutz" className="hover:text-blue-600 transition-colors">Datenschutz</Link>
+          <div className="border-t border-slate-200 pt-4 mt-2 space-y-2">
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-slate-400">
+              <span>© {new Date().getFullYear()} Die Notfallakademie UG (haftungsbeschränkt)</span>
+              <Link href="/impressum" className="hover:text-blue-600 transition-colors">Impressum</Link>
+              <Link href="/datenschutz" className="hover:text-blue-600 transition-colors">Datenschutz</Link>
+            </div>
+            <div className="flex justify-center">
+              <a
+                href={`mailto:admin@notfallakademie.org?subject=${encodeURIComponent('PräopEval Feedback')}&body=${encodeURIComponent('Mein Verbesserungsvorschlag:\n\n')}`}
+                className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-blue-600 transition-colors border border-slate-200 rounded-full px-3 py-1 hover:border-blue-300"
+              >
+                <MessageSquare className="w-3 h-3" />
+                Verbesserungsvorschlag einreichen
+              </a>
+            </div>
           </div>
 
         </div>
@@ -1075,9 +1080,10 @@ export default function PraeopEval() {
 
       {/* Floating medication search button */}
       <button onClick={() => setMedOpen(true)}
-        className="fixed bottom-20 right-4 z-50 bg-teal-600 text-white rounded-full w-11 h-11 flex items-center justify-center shadow-lg hover:bg-teal-700 transition-colors"
+        className="fixed bottom-20 right-3 z-50 bg-teal-600 text-white rounded-full px-4 py-2.5 flex items-center gap-2 shadow-lg hover:bg-teal-700 transition-colors text-sm font-semibold"
         title="Medikamenten-Suche">
-        <Pill className="w-5 h-5" />
+        <Pill className="w-4 h-4 flex-shrink-0" />
+        <span>Medikamente</span>
       </button>
 
       {/* Medication search drawer */}
