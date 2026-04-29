@@ -264,8 +264,12 @@ export type FastingCard = 'red' | 'yellow' | 'green'
 export function determineFastingCard(f: FormState): FastingCard {
   const isEmergencyN0N2 = f.emergencyClass === 'N0' || f.emergencyClass === 'N1' || f.emergencyClass === 'N2'
   if (f.fast_ileus || f.fast_giObstruction || f.fast_abdominalEmergency || f.fast_pylorusStenosis || isEmergencyN0N2) return 'red'
+  // Diabetische Gastroparese: insulinpflichtiger DM oder schlecht eingestellter DM (HbA1c >8,5 %)
+  const hba1cV = parseFloat(f.hba1c)
+  const diabGastroparesis = f.rcriDiabetesInsulin || ((f.hxDiabetes || f.rcriDiabetesInsulin) && !isNaN(hba1cV) && hba1cV > 8.5)
   if (f.emergencyClass === 'N3' || f.hxGLP1 || f.fast_ileostomy || f.fast_endoscopy || f.fast_mrcp ||
-    f.reflux_atRest || f.reflux_regurgitation || f.reflux_mealIndependent || f.reflux_nocturnalCough) return 'yellow'
+    f.reflux_atRest || f.reflux_regurgitation || f.reflux_mealIndependent || f.reflux_nocturnalCough ||
+    diabGastroparesis) return 'yellow'
   return 'green'
 }
 
@@ -291,31 +295,111 @@ export interface DiagnosticRec { name: string; recommended: boolean; reason: str
 
 export function buildDiagnostics(f: FormState, rcri: number, ariscat: number | null): DiagnosticRec[] {
   const age = parseInt(f.age)
-  const mid = f.surgicalRisk === 'intermediate' || f.surgicalRisk === 'high'
-  const hasCV = f.rcriIschemicHD || f.rcriHeartFailure || f.rcriCerebrovascular
-  const ekg = mid && (rcri >= 1 || hasCV || (!isNaN(age) && age >= 45))
-  const biomarker = mid && (rcri >= 1 || (!isNaN(age) && age >= 65))
-  const creatEgfr = (!isNaN(age) && age >= 45) || f.rcriDiabetesInsulin || f.hxHypertension || f.rcriCreatinineOver2
-  const hba1c = f.rcriDiabetesInsulin || f.hxDiabetes
-  const elektrolyte = f.hxACEorARB || f.hxDiuretic || f.hxSGLT2 || f.rcriCreatinineOver2
+  const hb = parseFloat(f.hemoglobin)
+  const cr = parseFloat(f.creatinine)
+  const w = parseFloat(f.weight), h = parseFloat(f.height)
+  const bmi = !isNaN(w) && !isNaN(h) ? calcBMI(w, h) : null
+
+  const hasDM = f.rcriDiabetesInsulin || f.hxDiabetes
+  const highRisk = f.surgicalRisk === 'high'
+  const mid = f.surgicalRisk === 'intermediate' || highRisk
+
+  // Organ disease categories (Table 7, DGAI 2024)
+  const hasCardiacDisease = f.rcriIschemicHD || f.rcriHeartFailure || f.hxValvularDisease ||
+    f.hxPoorLVFunction || f.activeCardiac_decompHF || f.activeCardiac_severeStenosisAo
+  const hasRenalDisease = f.rcriCreatinineOver2 || (!isNaN(cr) && cr > 2.0) || f.hxHypertension
+  const hasLungDisease = f.hxCOPD || f.hxOSA
+  const hasBloodDisease = !isNaN(hb) && !!f.sex && isAnaemia(hb, f.sex)
+  const hasOrganDisease = hasCardiacDisease || f.hxLiverDisease || hasRenalDisease || hasLungDisease
+
+  const hasCVRiskFactor = rcri >= 1 || hasDM || f.hxHypertension || f.nox_smoking ||
+    (bmi !== null && bmi >= 30)
+
+  // EKG: cardiac disease always; CV risk factor + medium/high-risk surgery (E27, DGAI 2024)
+  const ekgIndication = hasCardiacDisease || f.activeCardiac_arrhythmia || (hasCVRiskFactor && mid)
+  const ekgReason = hasCardiacDisease ? 'Bekannte kardiovaskuläre Erkrankung (E27 DGAI 2024)' :
+    f.activeCardiac_arrhythmia ? 'Arrhythmie' :
+    'Kardiovaskulärer Risikofaktor + mittleres/hohes OP-Risiko (E27 DGAI 2024)'
+
+  // Biomarker: CV disease/RF + medium/high risk; NOT low-risk patients in low/medium-risk surgery (E24–E26)
+  const biomarkerIndication = mid && (hasCVRiskFactor || hasCardiacDisease || (!isNaN(age) && age >= 65))
+  const biomarkerReason = biomarkerIndication
+    ? `Kardiovaskuläres Risiko + ${f.surgicalRisk === 'high' ? 'hohes' : 'mittleres'} OP-Risiko → MINS-Monitoring prä+24h+48h postop (E24 DGAI 2024)`
+    : 'Keine Indikation (low-risk Patient bei low/medium-risk OP, E26 DGAI 2024)'
+
+  // Blutbild: NOT routine for everyone — only with organ disease, high surgical bleeding risk, or known anemia
+  // E21 DGAI 2024: Routine-Blutuntersuchung SOLL NICHT durchgeführt werden
+  // Hb only when: organ disease (Table 7) OR high-risk surgery (>10% transfusion risk) OR known anemia
+  const blutbildIndication = hasOrganDisease || highRisk || hasBloodDisease || f.nox_alcohol
+  const blutbildReason = blutbildIndication
+    ? (hasOrganDisease ? 'Organerkrankung (Minimalstandard, Tab. 7 DGAI 2024)' :
+       highRisk ? 'Hochrisiko-Eingriff (Bluttransfusionsrisiko >10 %)' :
+       hasBloodDisease ? 'Bekannte Anämie — Verlaufskontrolle' :
+       'Alkohol — Leberfunktionsrisiko')
+    : 'Keine Routineindikation (E21 DGAI 2024) — nur bei Organerkrankung oder Hochrisiko-Eingriff'
+
+  // Kreatinin: organ disease (Table 7) + high-risk surgery (E23) + DM + hypertension
+  const creatEgfr = hasOrganDisease || highRisk || hasDM || f.hxHypertension
+  const creatReason = creatEgfr
+    ? [hasCardiacDisease && 'Herzerkrankung', f.hxLiverDisease && 'Lebererkrankung',
+       hasRenalDisease && 'Nierenerkrankung', highRisk && 'Hochrisiko-OP (E23 DGAI 2024)',
+       hasDM && 'Diabetes', f.hxHypertension && 'Hypertonie'].filter(Boolean).join(', ')
+    : 'Keine Indikation'
+
+  // HbA1c/BZ: known DM (always), OR high-risk surgery + BMI≥30 + CV risk (DGAI 2024 B.1.1)
+  const hba1cIndication = hasDM || (highRisk && bmi !== null && bmi >= 30)
+  const hba1cReason = hba1cIndication
+    ? hasDM ? 'Diabetes: HbA1c für OP-Verschiebungsentscheidung (>8,5 % → Optimierung)' :
+      'Hochrisiko-OP + Adipositas: Screening auf unerkannten Diabetes'
+    : 'Keine Indikation'
+
+  // Elektrolyte: cardiac/renal disease, relevant medications
+  const elektrolyteIndication = hasCardiacDisease || hasRenalDisease || f.hxACEorARB || f.hxDiuretic || f.hxSGLT2
   const coag = needsCoagulationWorkup(f)
-  const tte = f.hxValvularDisease || f.hxPoorLVFunction || f.activeCardiac_severeStenosisAo || f.activeCardiac_severeMitralStenosis
+
+  // TTE: specific indications only — NOT routine, NOT stable HF/KHK alone (E28–E31 DGAI 2024)
+  const ntpV = parseFloat(f.ntprobnp), bnpV = parseFloat(f.bnp)
+  const elevatedBNP = (!isNaN(ntpV) && ntpV >= 300) || (!isNaN(bnpV) && bnpV >= 92)
+  const tteIndication = f.hxValvularDisease || f.hxPoorLVFunction ||
+    f.activeCardiac_severeStenosisAo || f.activeCardiac_severeMitralStenosis ||
+    (f.activeCardiac_decompHF && f.functionalCapacity === 'poor') ||
+    (elevatedBNP && mid && hasCVRiskFactor)
+  const tteReason = tteIndication
+    ? (f.hxValvularDisease || f.activeCardiac_severeStenosisAo || f.activeCardiac_severeMitralStenosis
+        ? 'Valvuläre Herzerkrankung (E28 DGAI 2024)'
+        : f.hxPoorLVFunction ? 'Eingeschränkte LV-Funktion (E31)'
+        : elevatedBNP ? `Erhöhtes BNP/NT-proBNP + mittleres/hohes OP-Risiko (E31)`
+        : 'Dekompensierte HF + eingeschränkte Belastbarkeit')
+    : 'Keine Routineindikation (E30 DGAI 2024) — nur bei valvulärer Erkrankung, eingeschränkter LV-Funktion oder erhöhtem BNP'
+
   const stress = stressTestIndication(f, rcri)
 
+  // Spirometrie: NOT routine (E41 DGAI 2024) — only known/suspected COPD before upper-abdominal or thoracic surgery
+  const spirometrieIndication = f.hxCOPD && (f.surgicalSite === 'upper-abdominal' || f.surgicalSite === 'intrathoracic')
+  const spirometrieReason = spirometrieIndication
+    ? 'COPD + Oberbauch-/intrathorakaler Eingriff (individuell erwägen, E41 DGAI 2024)'
+    : f.hxCOPD ? 'COPD bekannt — Spirometrie nur bei Oberbauch/intrathorakalem Eingriff indiziert (E41)' : 'Keine Indikation (E41 DGAI 2024)'
+
+  // Röntgen Thorax: only specific suspicion with management consequence (E42 DGAI 2024)
+  const rontgenIndication = f.activeCardiac_decompHF || f.ariscat_respInfection
+  const rontgenReason = rontgenIndication
+    ? (f.activeCardiac_decompHF ? 'Dekompensierte Herzinsuffizienz — klinisch indiziert' : 'Respiratorischer Infekt — Pneumonie ausschließen')
+    : 'Keine Routineindikation (E42 DGAI 2024) — nur bei klinischer Verdachtsdiagnose mit OP-Konsequenz'
+
   return [
-    { name: 'EKG (12-Kanal)', recommended: ekg, reason: ekg ? `RCRI ≥1 und/oder CV-Erkrankung + mittleres/hohes OP-Risiko (ESC 2022)` : 'Keine Indikation' },
-    { name: 'hsTroponin I/T (prä- und postoperativ 24h+48h)', recommended: biomarker, reason: biomarker ? 'RCRI ≥1 und/oder Alter ≥65 J. + mittleres/hohes OP-Risiko → Baseline + postop. MINS-Monitoring (ESC 2022)' : 'Keine Indikation' },
-    { name: 'BNP / NT-proBNP', recommended: biomarker, reason: biomarker ? 'Risikostratifizierung: NT-proBNP ≥300 ng/L = erhöhtes MACE-Risiko' : 'Keine Indikation' },
-    { name: 'Blutbild', recommended: true, reason: 'Anämie-Screening (PBM-Konzept, DGAI 2023) — für alle Patient:innen' },
-    { name: 'Kreatinin / eGFR', recommended: creatEgfr, reason: creatEgfr ? 'Alter ≥45 J., Diabetes, Hypertonie' : 'Keine Indikation' },
-    { name: 'Blutzucker / HbA1c', recommended: hba1c, reason: hba1c ? 'Diabetes: HbA1c für OP-Verschiebungsentscheidung (>8,5 % → Optimierung)' : 'Keine Indikation' },
-    { name: 'Elektrolyte (Na⁺, K⁺)', recommended: elektrolyte, reason: elektrolyte ? `ACE-Hemmer/Sartan, Diuretikum oder SGLT-2 bekannt` : 'Keine Indikation' },
+    { name: 'EKG (12-Kanal)', recommended: ekgIndication, reason: ekgIndication ? ekgReason : 'Keine Indikation' },
+    { name: 'hsTroponin I/T (prä- und postoperativ 24h+48h)', recommended: biomarkerIndication, reason: biomarkerReason },
+    { name: 'BNP / NT-proBNP', recommended: biomarkerIndication, reason: biomarkerIndication ? 'Risikostratifizierung + postop. Monitoring (E25 DGAI 2024)' : 'Keine Indikation' },
+    { name: 'Blutbild', recommended: blutbildIndication, reason: blutbildReason },
+    { name: 'Kreatinin / eGFR', recommended: creatEgfr, reason: creatReason },
+    { name: 'Blutzucker / HbA1c', recommended: hba1cIndication, reason: hba1cReason },
+    { name: 'Elektrolyte (Na⁺, K⁺)', recommended: elektrolyteIndication, reason: elektrolyteIndication ? 'Herzerkrankung, Nierenerkrankung oder elektrolytrelevante Medikation' : 'Keine Indikation' },
     { name: 'Gerinnungsstatus (INR, aPTT)', recommended: coag.needed, reason: coag.reason },
     { name: 'Leberwerte', recommended: f.hxLiverDisease, reason: f.hxLiverDisease ? 'Lebererkrankung: Synthesefunktion prüfen' : 'Keine Indikation' },
-    { name: 'Echokardiographie (TTE)', recommended: tte, reason: tte ? 'Valvuläre Herzerkrankung / eingeschränkte LV-Funktion' : 'Kein routinemäßiges Screening' },
+    { name: 'Echokardiographie (TTE)', recommended: tteIndication, reason: tteReason },
     { name: 'Nicht-invasiver Stresstest', recommended: stress.indication !== 'none', reason: stress.reason || 'Keine Indikation' },
-    { name: 'Spirometrie / Lungenfunktion', recommended: (ariscat !== null && ariscat >= 26) || f.hxCOPD, reason: ariscat !== null && ariscat >= 26 ? `ARISCAT ${ariscat} Punkte ≥26` : f.hxCOPD ? 'Bekannte COPD' : 'Keine Indikation' },
-    { name: 'Röntgen Thorax', recommended: f.activeCardiac_decompHF || f.rcriHeartFailure, reason: f.activeCardiac_decompHF ? 'Dekompensierte Herzinsuffizienz' : 'Keine Routineindikation' },
+    { name: 'Spirometrie / Lungenfunktion', recommended: spirometrieIndication, reason: spirometrieReason },
+    { name: 'Röntgen Thorax', recommended: rontgenIndication, reason: rontgenReason },
   ]
 }
 
@@ -356,22 +440,35 @@ export function buildRecommendations(f: FormState, rcri: number, ariscat: number
   if (!isNaN(ntpVal) && ntpVal >= 300) recs.push(`NT-proBNP ${ntpVal} ≥300 ng/L → postoperatives Troponin-Monitoring obligat (24h + 48h)`)
   if (!isNaN(bnpVal) && bnpVal >= 92) recs.push(`BNP ${bnpVal} ≥92 ng/L → postoperatives Troponin-Monitoring empfohlen`)
 
-  if (f.hxBetablocker) recs.push('Beta-Blocker weiterführen — abruptes Absetzen kontraindiziert')
-  if (f.hxStatin) recs.push('Statin weiterführen — Absetzen erhöht kardiales Risiko')
-  if (f.hxACEorARB) recs.push('ACE-Hemmer/Sartan: am OP-Morgen pausieren (Hypotonie-Risiko)')
-  if (f.hxSGLT2) recs.push('SGLT-2-Inhibitor: 3–4 Tage präoperativ absetzen (euDKA-Risiko!)')
-  if (f.hxGLP1) recs.push('GLP-1-Agonist: wöchentliche Form 1 Woche vor OP; täglich am OP-Tag absetzen — Aspirationsrisiko durch Gastroparese beachten')
-  if (f.hxAnticoagulant || f.bleeding_anticoagulant) recs.push('Antikoagulation: individuelles Bridging-Konzept erforderlich')
-  if (f.hxAntiplatelet) recs.push('Thrombozytenaggregationshemmer: Pausierungsstrategie individuell — bei Stent keine Unterbrechung ohne kardiologische Freigabe')
+  if (f.hxBetablocker) recs.push('Beta-Blocker weiterführen — abruptes Absetzen kontraindiziert (E46 DGAI 2024)')
+  if (f.hxStatin) recs.push('Statin weiterführen — Absetzen erhöht kardiales Risiko (E53 DGAI 2024)')
+  if (f.hxACEorARB) {
+    if (f.hxPoorLVFunction) recs.push('ACE-Hemmer/Sartan: bei eingeschränkter LV-Funktion WEITERFÜHREN (E48 Ausnahme DGAI 2024)')
+    else recs.push('ACE-Hemmer/Sartan: am OP-Morgen pausieren — Hypotonie-Risiko (E48 DGAI 2024)')
+  }
+  if (f.hxSGLT2) {
+    const sglt2Pause = f.surgicalRisk === 'high' || f.surgicalRisk === 'intermediate'
+      ? '≥72 h (3 Tage)' : '24–48 h'
+    recs.push(`SGLT-2-Inhibitor: ${sglt2Pause} präoperativ absetzen (euDKA-Risiko! E49 DGAI 2024)`)
+  }
+  if (f.hxGLP1) recs.push('GLP-1-Agonist: wöchentliche Form 1 Woche vor OP; täglich am OP-Tag absetzen — verzögerte Magenentleerung → Aspirationsrisiko (E50 DGAI 2024)')
+  if (f.hxAnticoagulant || f.bleeding_anticoagulant) recs.push('Antikoagulation: individuelles Bridging-Konzept erforderlich (C.4 DGAI 2024)')
+  if (f.hxAntiplatelet) recs.push('Thrombozytenaggregationshemmer: Pausierungsstrategie individuell — bei Stent keine Unterbrechung ohne kardiologische Freigabe (C.4.3 DGAI 2024)')
 
+  const hasDM = f.rcriDiabetesInsulin || f.hxDiabetes
   const hba1cV = parseFloat(f.hba1c)
-  if ((f.rcriDiabetesInsulin || f.hxDiabetes) && !isNaN(hba1cV)) {
+  if (hasDM && !isNaN(hba1cV)) {
     const ev = evaluateHbA1c(hba1cV)
     recs.push(ev.label)
     if (ev.postpone) recs.push('Diabetologisches Konsil für präoperative Optimierung')
-  } else if (f.rcriDiabetesInsulin || f.hxDiabetes) {
-    recs.push('Diabetes: HbA1c bestimmen, perioperativer Ziel-BZ 140–180 mg/dL')
+    if (f.rcriDiabetesInsulin) recs.push('Insulintherapie: Basalinsulin OP-Abend/Morgen um ≤50 % reduzieren, kein Bolusinsulin bei NPO; BZ-Kontrollen alle 1–2 h perioperativ')
+  } else if (hasDM) {
+    recs.push('Diabetes: HbA1c bestimmen, perioperativer Ziel-BZ 140–180 mg/dL (7,8–10 mmol/L)')
+    if (f.rcriDiabetesInsulin) recs.push('Insulintherapie: Basisrate aufrechterhalten, kein Bolusinsulin bei Nüchternheit')
   }
+  const hba1cVcheck = parseFloat(f.hba1c)
+  const diabGastroparesis = f.rcriDiabetesInsulin || (hasDM && !isNaN(hba1cVcheck) && hba1cVcheck > 8.5)
+  if (diabGastroparesis && !f.hxGLP1) recs.push('Diabetische Gastroparese möglich (insulinpflichtiger/schlecht eingestellter DM) → gelbe Nüchternheitskarte, Aspirationsrisiko beachten')
 
   if (sb >= 5) recs.push('STOP-BANG ≥5 → Hohes OSA-Risiko: schlafmedizinische Abklärung, CPAP perioperativ sicherstellen, erhöhte postop. Überwachung')
   else if (sb >= 3) recs.push('STOP-BANG 3–4 → Mittleres OSA-Risiko: Abklärung empfehlen, CPAP bei bekannter OSA sicherstellen')
@@ -604,9 +701,15 @@ export function buildAssessmentItems(f: FormState, rcri: number, ariscat: number
     dr.recommendations.forEach(r => items.push({ category: 'Delirium-Prävention', text: r, urgency: 'medium' }))
   }
 
-  if (f.hxSGLT2) items.push({ category: 'Medikation', text: 'SGLT-2-Inhibitor: 3–4 Tage präoperativ ABSETZEN (euDKA-Risiko!)', urgency: 'high' })
-  if (f.hxGLP1) items.push({ category: 'Medikation', text: 'GLP-1-Agonist: 1 Woche (wöchentl.) bzw. OP-Tag (tägl.) ABSETZEN — Aspirationsrisiko!', urgency: 'high' })
-  if (f.hxACEorARB) items.push({ category: 'Medikation', text: 'ACE-Hemmer/Sartan: am OP-Morgen PAUSIEREN', urgency: 'medium' })
+  if (f.hxSGLT2) {
+    const sglt2Pause = f.surgicalRisk === 'high' || f.surgicalRisk === 'intermediate' ? '≥72 h' : '24–48 h'
+    items.push({ category: 'Medikation', text: `SGLT-2-Inhibitor: ${sglt2Pause} präoperativ ABSETZEN (euDKA-Risiko!)`, urgency: 'high' })
+  }
+  if (f.hxGLP1) items.push({ category: 'Medikation', text: 'GLP-1-Agonist: 1 Woche (wöchentl.) bzw. OP-Tag (tägl.) ABSETZEN — Gastroparese → Aspirationsrisiko!', urgency: 'high' })
+  if (f.hxACEorARB) {
+    if (f.hxPoorLVFunction) items.push({ category: 'Medikation', text: 'ACE-Hemmer/Sartan: bei LV-Dysfunktion WEITERFÜHREN (Ausnahme E48)', urgency: 'medium' })
+    else items.push({ category: 'Medikation', text: 'ACE-Hemmer/Sartan: am OP-Morgen PAUSIEREN (Hypotonie-Risiko)', urgency: 'medium' })
+  }
   if (f.hxAnticoagulant || f.bleeding_anticoagulant) items.push({ category: 'Medikation', text: 'Antikoagulation: Bridging-Konzept erstellen', urgency: 'high' })
   if (f.hxAntiplatelet && (f.stent_hasDES || f.stent_hasBMS)) items.push({ category: 'Medikation', text: 'TAH bei Stent: keine Pause ohne kardiologische Freigabe!', urgency: 'critical' })
 

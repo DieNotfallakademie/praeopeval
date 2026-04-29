@@ -293,10 +293,40 @@ export const MEDICATIONS: Medication[] = [
     genericName: 'Metformin',
     tradeNames: ['Glucophage', 'Metformin-ratiopharm', 'Diabesin', 'Siofor'],
     drugClass: 'Biguanid (Antidiabetikum)',
+    urgency: 'caution',
+    perioperativeManagement:
+      'Niedrig/mittleres OP-Risiko (keine Gewebshypoxie, normale Nierenfunktion): bis zum Vorabend der OP fortführen (E51 DGAI 2024). Hohes OP-Risiko (große Abdominal-/orthopädische Eingriffe) oder Kontrastmittelgabe: 48 h vor OP pausieren (E52 DGAI 2024). Risiko: Laktatazidose bei Kumulation (Niereninsuffizienz, Hypoxie). Postoperativ: Wiederansetzen nach Stabilisierung von GFR und oraler Ernährung.',
+    renalNote: 'KONTRAINDIZIERT bei GFR <30 ml/min. Bei GFR 30–45: nur nach individueller Abwägung, Kontrastmittel kontraindiziert. Bei GFR 45–60: engmaschige Kontrolle.',
+  },
+  {
+    id: 'repaglinid',
+    genericName: 'Repaglinid',
+    tradeNames: ['NovoNorm', 'Prandin', 'Repaglinid-ratiopharm'],
+    drugClass: 'Glinid (kurzwirksamer Insulinsekretagog)',
     urgency: 'pause',
     perioperativeManagement:
-      'Pausieren: 24–48 h vor großen Eingriffen oder wenn Kontrastmittel/Hypovolämie/Allgemeinanästhesie geplant. Risiko: Laktatazidose bei Nierenfunktionseinschränkung perioperativ. Postoperativ: Wiederansetzen wenn GFR stabil und normale orale Ernährung.',
-    renalNote: 'KONTRAINDIZIERT bei GFR <30 ml/min. Bei GFR 30–45: Kontraindiziert für elektive Eingriffe oder Kontrastmittelgabe. Bei GFR 45–60: 48 h Pause perioperativ.',
+      'Am OP-Morgen absetzen (Nüchternheit → Hypoglykämie-Risiko bei Insulinfreisetzung ohne Kohlenhydratzufuhr). Postoperativ erst wieder ansetzen wenn normale Mahlzeiten möglich.',
+    renalNote: 'Bei GFR <40: Vorsicht, Startdosis reduzieren. Vorwiegend hepatische Metabolisierung.',
+  },
+  {
+    id: 'pioglitazon',
+    genericName: 'Pioglitazon',
+    tradeNames: ['Actos', 'Pioglitazon-ratiopharm'],
+    drugClass: 'Thiazolidindion / Glitazon (Insulinsensitizer)',
+    urgency: 'continue',
+    perioperativeManagement:
+      'In der Regel keine Pause erforderlich (E DGAI 2024: Thiazolidindione — keine spezifische Pausierungsempfehlung bei Monotherapie). Cave: Flüssigkeitsretention und Ödemrisiko — perioperative Flüssigkeitsbilanz beachten. Bei bekannter Herzinsuffizienz kontraindiziert.',
+    renalNote: 'Keine Dosisanpassung erforderlich (hepatische Metabolisierung).',
+  },
+  {
+    id: 'acarbose',
+    genericName: 'Acarbose',
+    tradeNames: ['Glucobay', 'Acarbose-ratiopharm'],
+    drugClass: 'Alpha-Glucosidase-Hemmer',
+    urgency: 'pause',
+    perioperativeManagement:
+      'Am OP-Tag absetzen (E50 DGAI 2024). Wirkung abhängig von Kohlenhydratzufuhr — bei Nüchternheit wirkungslos. Kein Hypoglykämie-Risiko in Monotherapie. Postoperativ: erst wieder ansetzen wenn normale Kohlenhydrat-haltige Mahlzeiten möglich.',
+    renalNote: 'Bei GFR <25 ml/min kontraindiziert.',
   },
   {
     id: 'empagliflozin',
@@ -325,6 +355,26 @@ export const MEDICATIONS: Medication[] = [
     urgency: 'pause',
     perioperativeManagement: '⚠ PAUSIEREN: 3–4 Tage (mind. 72 h) vor OP. euDKA-Risiko.',
     renalNote: 'Bei GFR <30: kontraindiziert.',
+  },
+  {
+    id: 'dulaglutid',
+    genericName: 'Dulaglutid',
+    tradeNames: ['Trulicity'],
+    drugClass: 'GLP-1-Rezeptoragonist (wöchentlich)',
+    urgency: 'pause',
+    perioperativeManagement:
+      '⚠ PAUSIEREN: 1 Woche vor geplantem Eingriff (wöchentliche Darreichungsform, E50 DGAI 2024). Verzögerte Magenentleerung → erhöhtes Aspirationsrisiko. Bei fehlender Pause oder Übelkeit/Erbrechen: Patient als nicht nüchtern betrachten. Engmaschige BZ-Kontrolle nach Absetzen.',
+    renalNote: 'Keine Dosisanpassung bei Niereninsuffizienz.',
+  },
+  {
+    id: 'tirzepatid',
+    genericName: 'Tirzepatid',
+    tradeNames: ['Mounjaro', 'Zepbound'],
+    drugClass: 'Dualer GIP/GLP-1-Rezeptoragonist (wöchentlich)',
+    urgency: 'pause',
+    perioperativeManagement:
+      '⚠ PAUSIEREN: 1 Woche vor geplantem Eingriff (wöchentliche Gabe, analog GLP-1-Agonisten, E50 DGAI 2024). Tirzepatid hat ausgeprägte gastroparetische Wirkung — verzögerte Magenentleerung und erhöhtes Aspirationsrisiko. Ultraschall-Magenfüllung präoperativ erwägen. BZ-Kontrolle nach Absetzen.',
+    renalNote: 'Keine Dosisanpassung erforderlich.',
   },
   {
     id: 'semaglutid',
@@ -674,6 +724,26 @@ export const MEDICATIONS: Medication[] = [
 
   // ── Kardiale Spezialmedikamente ─────────────────────────────────────────────
   {
+    id: 'sacubitril-valsartan',
+    genericName: 'Sacubitril / Valsartan',
+    tradeNames: ['Entresto'],
+    drugClass: 'Angiotensin-Rezeptor-Neprilysin-Inhibitor (ARNI)',
+    urgency: 'continue',
+    perioperativeManagement:
+      'WEITERFÜHREN. Indikation: Herzinsuffizienz mit reduzierter EF (HFrEF) <35 %. Abruptes Absetzen bei HFrEF kontraindiziert (analog zu ACE-Hemmern bei LV-Dysfunktion, C.1.4/C.1.5 DGAI 2024). Cave: Kombination mit RAAS-Aktivierung perioperativ → Hypotoniepotenzial. Anästhesist über Einnahme informieren. Postoperativ Nierenfunktion überwachen.',
+    renalNote: 'Bei GFR <30: Startdosis 24/26 mg 2×/d, engmaschige Nierenwert-Kontrolle. Kontraindiziert bei GFR <15.',
+  },
+  {
+    id: 'ivabradin',
+    genericName: 'Ivabradin',
+    tradeNames: ['Procoralan', 'Corlentor'],
+    drugClass: 'If-Kanal-Inhibitor (negativ chronotrop)',
+    urgency: 'continue',
+    perioperativeManagement:
+      'WEITERFÜHREN (C.1.5 DGAI 2024). Indikation: Herzinsuffizienz mit Sinustachykardie oder stabile Angina. Keine relevanten Wechselwirkungen mit Anästhetika. Cave: Bradykardie perioperativ möglich — EKG-Monitoring. Kein abruptes Absetzen bei laufender HF-Therapie.',
+    renalNote: 'Keine Dosisanpassung erforderlich.',
+  },
+  {
     id: 'amiodaron',
     genericName: 'Amiodaron',
     tradeNames: ['Cordarone', 'Amiodaron-ratiopharm'],
@@ -692,6 +762,58 @@ export const MEDICATIONS: Medication[] = [
     perioperativeManagement:
       'Weiterführen bei gut eingestelltem Spiegel. Enge therapeutische Breite! Digoxinspiegel, Elektrolyte (K+, Mg++) präoperativ prüfen. Hypokaliämie → Glykosid-Toxizität. Perioperative EKG-Überwachung.',
     renalNote: '⚠ Renale Elimination! Bei GFR <30: Dosis halbieren, Talspiegel-Kontrolle. Bei GFR <10: alternative antiarrhythmische Therapie erwägen.',
+  },
+
+  // ── Anti-Parkinson ────────────────────────────────────────────────────────────
+  {
+    id: 'levodopa-carbidopa',
+    genericName: 'Levodopa / Carbidopa',
+    tradeNames: ['Sinemet', 'Nacom', 'Madopar (+ Benserazid)', 'Stalevo (+ Entacapon)'],
+    drugClass: 'Dopaminpräkursor (Anti-Parkinson)',
+    urgency: 'continue',
+    perioperativeManagement:
+      '⚠⚠ NIEMALS ABSETZEN — auch am OP-Tag unbedingt fortführen (E68 DGAI 2024)! Absetzen → Parkinson-Krise mit Muskelrigidität, Ateminsuffizienz, Schluckstörungen und akinetischer Krise (lebensbedrohlich). Einnahme bis kurz vor Nüchternheitsphase. Bei postoperativer NPO: sofortige Umstellung auf transdermales Rotigotin (Neupro) nach neurologischer Rücksprache — oder Magensonde perioperativ erwägen. Metoclopramid, Haloperidol und alle Dopamin-Antagonisten strikt KONTRAINDIZIERT.',
+    renalNote: 'Keine spezifische Dosisanpassung bei Niereninsuffizienz erforderlich.',
+  },
+  {
+    id: 'pramipexol',
+    genericName: 'Pramipexol',
+    tradeNames: ['Mirapexin', 'Sifrol', 'Pramipexol-ratiopharm'],
+    drugClass: 'Dopaminagonist (Anti-Parkinson)',
+    urgency: 'continue',
+    perioperativeManagement:
+      '⚠ WEITERFÜHREN — auch am OP-Tag (E68 DGAI 2024). Abruptes Absetzen kann Parkinson-Krise und Dopamin-Agonist-Entzugssyndrom (DAWS) auslösen. Bei postoperativer NPO: auf transdermales Rotigotin umstellen (Rücksprache Neurologie). Dopamin-Antagonisten (Metoclopramid, Domperidon, typische Neuroleptika) KONTRAINDIZIERT.',
+    renalNote: 'Bei GFR <50: Dosisreduktion erforderlich (renale Elimination). GFR 20–50: 2×/d statt 3×/d.',
+  },
+  {
+    id: 'ropinirol',
+    genericName: 'Ropinirol',
+    tradeNames: ['Requip', 'Adartrel', 'Ropinirol-ratiopharm'],
+    drugClass: 'Dopaminagonist (Anti-Parkinson / Restless Legs)',
+    urgency: 'continue',
+    perioperativeManagement:
+      '⚠ WEITERFÜHREN — auch am OP-Tag (E68 DGAI 2024). Wie Pramipexol: Absetzen → Parkinson-Krise. Bei NPO: transdermales Rotigotin erwägen. Dopamin-Antagonisten kontraindiziert.',
+    renalNote: 'Bei GFR <30: Vorsicht, Dosis reduzieren.',
+  },
+  {
+    id: 'rotigotin',
+    genericName: 'Rotigotin',
+    tradeNames: ['Neupro'],
+    drugClass: 'Dopaminagonist transdermal (Anti-Parkinson)',
+    urgency: 'continue',
+    perioperativeManagement:
+      'WEITERFÜHREN — transdermales Pflaster auch perioperativ beibeheben (E68 DGAI 2024). Besonders geeignet für NPO-Phasen als Bridging bei Patienten unter oraler Parkinson-Therapie. Pflasterwechsel täglich zu fester Zeit. Dopamin-Antagonisten kontraindiziert.',
+    renalNote: 'Keine Dosisanpassung bei Niereninsuffizienz.',
+  },
+  {
+    id: 'amantadin',
+    genericName: 'Amantadin',
+    tradeNames: ['PK-Merz', 'Amantadin-ratiopharm'],
+    drugClass: 'NMDA-Antagonist / Anti-Parkinson',
+    urgency: 'continue',
+    perioperativeManagement:
+      'WEITERFÜHREN perioperativ (E68 DGAI 2024). Cave: renale Elimination — bei eingeschränkter Nierenfunktion Dosisanpassung und Toxizitätsmonitoring (Verwirrtheit, Halluzinationen). Bei NPO kann i.v. Amantadin (Amantadin-Infusionslösung) verabreicht werden.',
+    renalNote: '⚠ Renale Elimination! Bei GFR 30–60: Dosishalbierung. Bei GFR <30: starke Dosisreduktion oder Absetzen nach neurologischer Rücksprache.',
   },
 
   // ── Bisphosphonate ──────────────────────────────────────────────────────────
