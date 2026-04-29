@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Copy, Check, RotateCcw, ChevronLeft, ChevronRight, AlertCircle, AlertTriangle } from 'lucide-react'
+import { Copy, Check, RotateCcw, ChevronLeft, ChevronRight, AlertCircle, AlertTriangle, Pill, X, MessageSquare } from 'lucide-react'
 import clsx from 'clsx'
 import { FormState, defaultFormState } from '@/lib/types'
 import {
@@ -93,6 +93,7 @@ export default function PraeopEval() {
   const [step, setStep] = useState(0)
   const [resultTab, setResultTab] = useState<'assessment' | 'protocol'>('assessment')
   const [copied, setCopied] = useState(false)
+  const [medOpen, setMedOpen] = useState(false)
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm(prev => ({ ...prev, [key]: value }))
@@ -151,9 +152,15 @@ export default function PraeopEval() {
           <h1 className="text-base font-bold tracking-tight">Präoperative Evaluation</h1>
           <p className="text-blue-300 text-xs">ESC 2022 · DGAI 2024</p>
         </div>
-        <button onClick={reset} className="text-blue-300 hover:text-white transition-colors p-1">
-          <RotateCcw className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <a href="mailto:admin@notfallakademie.org?subject=Pr%C3%A4opEval%20Feedback&body=Mein%20Verbesserungsvorschlag%3A%0A%0A"
+            className="text-blue-300 hover:text-white transition-colors p-1" title="Feedback senden">
+            <MessageSquare className="w-4 h-4" />
+          </a>
+          <button onClick={reset} className="text-blue-300 hover:text-white transition-colors p-1" title="Neue Evaluation">
+            <RotateCcw className="w-4 h-4" />
+          </button>
+        </div>
       </header>
 
       {/* Progress bar */}
@@ -755,10 +762,6 @@ export default function PraeopEval() {
               <CheckRow label="Lebererkrankung" checked={form.hxLiverDisease} onChange={v => set('hxLiverDisease', v)} />
             </div>
 
-            <SecHeader title="Medikamenten-Suche (perioperatives Management)" color="teal" />
-            <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <MedicationSearch />
-            </div>
           </>}
 
           {/* ── STEP 6: Pulmonales + STOP-BANG + PEN-FAST ───────────────── */}
@@ -1044,6 +1047,31 @@ export default function PraeopEval() {
 
         </div>
       </div>
+
+      {/* Floating medication search button */}
+      <button onClick={() => setMedOpen(true)}
+        className="fixed bottom-20 right-4 z-50 bg-teal-600 text-white rounded-full w-11 h-11 flex items-center justify-center shadow-lg hover:bg-teal-700 transition-colors"
+        title="Medikamenten-Suche">
+        <Pill className="w-5 h-5" />
+      </button>
+
+      {/* Medication search drawer */}
+      {medOpen && (
+        <div className="fixed inset-0 z-[60] flex justify-end">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMedOpen(false)} />
+          <div className="relative w-full max-w-sm bg-white h-full flex flex-col shadow-xl">
+            <div className="bg-teal-700 text-white px-4 py-3 flex items-center justify-between">
+              <span className="font-semibold text-sm">Medikamenten-Suche</span>
+              <button onClick={() => setMedOpen(false)} className="text-teal-200 hover:text-white p-0.5">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <MedicationSearch />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bottom navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-3 flex gap-3 z-50">

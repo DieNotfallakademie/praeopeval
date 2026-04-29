@@ -394,130 +394,169 @@ export function generateProtocolText(f: FormState): string {
   const today = new Date().toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' })
   const age = parseInt(f.age), w = parseFloat(f.weight), h = parseFloat(f.height)
   const cr = parseFloat(f.creatinine), hb = parseFloat(f.hemoglobin)
-  const bmi = !isNaN(w)&&!isNaN(h) ? calcBMI(w,h) : null
-  const egfr = !isNaN(cr)&&!isNaN(age)&&f.sex ? calcEGFR(cr,age,f.sex) : null
+  const bmi = !isNaN(w) && !isNaN(h) ? calcBMI(w, h) : null
+  const egfr = !isNaN(cr) && !isNaN(age) && f.sex ? calcEGFR(cr, age, f.sex) : null
   const py = calcPackYears(f.nox_cigPerDay, f.nox_smokingYears)
   const rcri = calcRCRI(f)
   const rcriR = rcriRisk(rcri)
   const ariscat = calcARISCAT(f)
   const sb = calcSTOPBANG(f)
   const pf = calcPENFAST(f)
-  const diags = buildDiagnostics(f, rcri, ariscat)
   const recs = buildRecommendations(f, rcri, ariscat, sb)
   const coag = needsCoagulationWorkup(f)
   const fc = determineFastingCard(f)
   const awScore = difficultAirwayScore(f)
   const awLabel = difficultAirwayLabel(awScore)
   const sx = f.sex === 'male' ? '♂' : f.sex === 'female' ? '♀' : ''
-  const sep = '─'.repeat(50)
-  const L: string[] = []
-
-  L.push('ANÄSTHESIOLOGISCHES PRÄMEDIKATIONSPROTOKOLL')
-  L.push(`Datum: ${today}`)
-  L.push('')
-
-  L.push('PATIENTENDATEN')
-  L.push(sep)
-  const pat = [f.age&&`${f.age} Jahre`, sx, !isNaN(w)&&`${w} kg`, !isNaN(h)&&`${h} cm`, bmi&&`BMI ${bmi}`].filter(Boolean).join(' | ')
-  L.push(pat || 'k.A.')
-  const lab = [!isNaN(cr)&&`Krea ${cr} mg/dL`, egfr&&`eGFR ${egfr} ml/min`, !isNaN(hb)&&`Hb ${hb.toFixed(1)} g/dL${f.sex&&isAnaemia(hb,f.sex)?' (Anämie)':''}`, f.hba1c&&`HbA1c ${f.hba1c} %`].filter(Boolean).join(' | ')
-  if (lab) L.push(lab)
-  L.push(`ASA: ${f.asa || 'nicht eingestuft'}`)
-  L.push('')
-
-  L.push('GEPLANTER EINGRIFF')
-  L.push(sep)
-  L.push(f.surgeryDescription || '(nicht angegeben)')
-  L.push(`Eingriffsbezogenes Risiko: ${f.surgicalRisk==='low'?'NIEDRIG (<1 %)':f.surgicalRisk==='intermediate'?'MITTEL (1–5 %)':f.surgicalRisk==='high'?'HOCH (>5 %)':'n.a.'}`)
-  L.push(`Belastungstoleranz: ${f.functionalCapacity==='good'?'≥4 METs (gut)':f.functionalCapacity==='poor'?'<4 METs (eingeschränkt)':'n.a.'}`)
-  if (f.emergencyClass && f.emergencyClass !== 'elective') L.push(`Dringlichkeit: ${f.emergencyClass}`)
-  L.push('')
-
-  L.push('ANÄSTHESIOLOGISCHE VORGESCHICHTE')
-  L.push(sep)
-  if (!f.prev_hadGA) {
-    L.push('Keine Vornarkosenananmese.')
-  } else {
-    const comps = [f.prev_ponv&&'PONV', f.prev_difficultAirway&&'Schwieriger Atemweg', f.prev_awareness&&'Awareness', f.prev_otherComplication].filter(Boolean).join(', ')
-    L.push(`Letzte Narkose: ${f.prev_year||'Jahr unbekannt'} — ${f.prev_wellTolerated?'gut vertragen':'Komplikationen: '+comps}`)
-  }
-  if (f.prev_familyMH) L.push('⚠ Familienanamnese: Maligne Hyperthermie — TRIGGERFREIE ANÄSTHESIE OBLIGAT')
-  else L.push('Familienanamnese: Keine bekannten Anästhesiekomplikationen (MH, Pseudocholinesterasemangel).')
-  L.push('')
-
-  L.push('ATEMWEG')
-  L.push(sep)
-  if (f.aw_mallampati) L.push(`Mallampati: Klasse ${f.aw_mallampati}`)
-  if (f.aw_mouthOpening) L.push(`Mundöffnung: ${f.aw_mouthOpening}`)
-  if (f.aw_tmd) L.push(`Thyreomentalabstand (TMA): ${f.aw_tmd}`)
-  if (f.aw_reklination) L.push(`Reklination: ${f.aw_reklination==='normal'?'frei':f.aw_reklination==='limited'?'eingeschränkt':'stark eingeschränkt'}`)
-  if (f.aw_ulbt) L.push(`ULBT: Klasse ${f.aw_ulbt}`)
-  const physSigns = [f.aw_beard&&'Bart', f.aw_shortNeck&&'Kurzer Hals', f.aw_micrognathia&&'Mikrognathie', f.aw_obese&&'Adipositas'].filter(Boolean)
-  if (physSigns.length) L.push(`Besonderheiten: ${physSigns.join(', ')}`)
-  L.push(`Atemweg-Prognose: ${awLabel.text}`)
-  if (f.aw_notes) L.push(`Notiz: ${f.aw_notes}`)
-  L.push('')
-
-  L.push('NOXEN')
-  L.push(sep)
-  if (f.nox_smoking && py !== null) L.push(`Raucher: ${f.nox_cigPerDay} Zigaretten/Tag seit ${f.nox_smokingYears} Jahren = ${py} py`)
-  else if (f.nox_exSmoker) L.push(`Ex-Raucher seit ${f.nox_exSmokerSince||'unbekannt'}`)
-  else L.push('Nikotinabusus: Nichtraucher')
-  L.push(`Alkohol: ${f.nox_alcohol?`${f.nox_alcoholGPerWeek||'Menge n.a.'} g/Woche`:'kein regelmäßiger Alkoholkonsum'}`)
-  if (f.nox_drugs) L.push(`Drogen: ${f.nox_drugsText||'vorhanden, Substanz n.a.'}`)
-  L.push('')
-
-  L.push('REFLUX / ASPIRATION')
-  L.push(sep)
-  if (f.reflux_heartburn || f.reflux_atRest || f.reflux_regurgitation) {
-    const rf = [f.reflux_heartburn&&'Sodbrennen', f.reflux_atRest&&'Reflux im Flachliegen', f.reflux_regurgitation&&'Regurgitation'].filter(Boolean)
-    L.push(`Positiv: ${rf.join(', ')}`)
-  } else {
-    L.push('Kein Sodbrennen, keine Regurgitation, kein Reflux im Flachliegen.')
-  }
-  L.push('')
-
-  L.push('BLUTUNGSANAMNESE')
-  L.push(sep)
-  if (coag.needed) {
-    L.push(`Auffällig: ${coag.reason}`)
-  } else {
-    L.push('Blutungsanamnese bland. Keine Spontanblutungen, keine verlängerten Blutungszeiten nach Eingriffen, keine positive Familienanamnese. Keine Antikoagulanzien.')
-  }
-  L.push('')
-
-  L.push('RISIKOSTRATIFIZIERUNG')
-  L.push(sep)
-  const rcriPos = rcriPositiveItems(f)
-  L.push(`RCRI nach Lee: ${rcri}/6 → MACE-Risiko ${rcriR.pct} (${rcriR.label})${rcriPos.length?'\n  Positiv: '+rcriPos.join(', '):''}`)
-  if (f.cfs > 0) L.push(`CFS: ${f.cfs}/9 — ${CFS_LABELS[f.cfs]}`)
-  if (ariscat !== null) { const ar = ariscatRisk(ariscat); L.push(`ARISCAT: ${ariscat} Punkte → pulmonales Risiko ${ar.pct} (${ar.label})`) }
-  L.push(`STOP-BANG: ${sb}/8 → OSA-Risiko ${stopBangRisk(sb).label}`)
-  if (pf !== null) { const pfR = penFastRisk(pf); L.push(`PEN-FAST: ${pf}/5 → Penicillin-Allergie IgE ${pfR.pct} wahrscheinlich`) }
-  else L.push('PEN-FAST: Keine Penicillin-Allergie angegeben')
   const isar = calcISAR(f)
   const dr = delirRisk(f, isar)
-  L.push(`Delirium-Risiko (ISAR ${isar}/6): ${dr.label}`)
   const amtsV = parseInt(f.delir_amts)
-  if (!isNaN(amtsV)) L.push(`  AMTS: ${amtsV}/10 → ${amtsV >= 8 ? 'kognitiv unauffällig' : amtsV >= 7 ? 'grenzwertig' : 'kognitive Einschränkung'}`)
-  if (f.delir_knownDementia) L.push('  Bekannte Demenz')
-  if (f.delir_prevDelirium) L.push('  Vorbekanntes Delir')
-  L.push('')
+  const sep = '─'.repeat(48)
+  const L: string[] = []
 
-  L.push('NÜCHTERNHEITSKARTE')
+  L.push('PRÄMEDIKATIONSPROTOKOLL')
+  L.push(`Datum: ${today}`)
   L.push(sep)
-  L.push(FASTING_CARD_INFO[fc].label + ' — ' + FASTING_CARD_INFO[fc].description)
+
+  // Patient (kompakt, eine Zeile)
+  const patParts = [
+    f.age && `${f.age} J.`, sx,
+    !isNaN(w) && `${w} kg`, !isNaN(h) && `${h} cm`,
+    bmi && `BMI ${bmi}`, f.asa && `ASA ${f.asa}`,
+  ].filter(Boolean)
+  L.push(patParts.join(' | '))
+  const labParts = [
+    !isNaN(cr) && `Krea ${cr} mg/dL`,
+    egfr && `eGFR ${egfr} ml/min`,
+    !isNaN(hb) && `Hb ${hb.toFixed(1)} g/dL${f.sex && isAnaemia(hb, f.sex) ? ' ⚠ Anämie' : ''}`,
+    f.hba1c && `HbA1c ${f.hba1c} %`,
+    f.ntprobnp && `NT-proBNP ${f.ntprobnp} ng/L`,
+    f.bnp && `BNP ${f.bnp} ng/L`,
+  ].filter(Boolean)
+  if (labParts.length) L.push(labParts.join(' | '))
   L.push('')
 
+  // Eingriff
+  L.push(f.surgeryDescription || 'Eingriff nicht angegeben')
+  const riskLabel = f.surgicalRisk === 'low' ? 'NIEDRIG (<1 %)' :
+    f.surgicalRisk === 'intermediate' ? 'MITTEL (1–5 %)' :
+    f.surgicalRisk === 'high' ? 'HOCH (>5 %)' : ''
+  const surParts = [
+    riskLabel && `Risiko: ${riskLabel}`,
+    f.functionalCapacity === 'poor' && 'METs <4 (eingeschränkt)',
+    f.emergencyClass && f.emergencyClass !== 'elective' && `Dringlichkeit: ${f.emergencyClass}`,
+  ].filter(Boolean)
+  if (surParts.length) L.push(surParts.join(' · '))
+  L.push('')
+
+  // Anästhesie-Vorgeschichte — nur wenn relevant
+  const hasPrevRelevant = f.prev_hadGA || f.prev_familyMH || f.prev_familyPseudocholin || f.prev_familyOther
+  if (hasPrevRelevant) {
+    L.push('ANÄSTHESIE-VORGESCHICHTE')
+    if (f.prev_hadGA) {
+      const comps = [
+        f.prev_ponv && 'PONV',
+        f.prev_difficultAirway && 'Schwieriger Atemweg',
+        f.prev_awareness && 'Awareness',
+        f.prev_otherComplication,
+      ].filter(Boolean).join(', ')
+      L.push(`Vorige Narkose (${f.prev_year || 'Jahr unbek.'}): ${f.prev_wellTolerated ? 'komplikationslos' : 'Komplikationen — ' + comps}`)
+    }
+    if (f.prev_familyMH) L.push('⚠ Familienanamnese: MALIGNE HYPERTHERMIE — triggerfreie Anästhesie obligat!')
+    if (f.prev_familyPseudocholin) L.push('Familienanamnese: Pseudocholinesterasemangel')
+    if (f.prev_familyOther) L.push(`Familienanamnese: ${f.prev_familyOther}`)
+    L.push('')
+  }
+
+  // Atemweg — nur wenn Befunde vorhanden
+  const hasAirwayFindings = f.aw_mallampati || f.aw_mouthOpening || f.aw_tmd || f.aw_reklination ||
+    f.aw_ulbt || f.aw_beard || f.aw_shortNeck || f.aw_micrognathia || f.aw_obese ||
+    f.aw_previousDifficult || f.aw_notes
+  if (hasAirwayFindings) {
+    L.push('ATEMWEG')
+    const awParts = [
+      f.aw_mallampati && `Mallampati ${f.aw_mallampati}`,
+      f.aw_mouthOpening && f.aw_mouthOpening !== '>4cm' && `Mundöffnung ${f.aw_mouthOpening}`,
+      f.aw_tmd && f.aw_tmd !== '>6.5cm' && `TMA ${f.aw_tmd}`,
+      f.aw_reklination && f.aw_reklination !== 'normal' &&
+        `Reklination ${f.aw_reklination === 'limited' ? 'eingeschränkt' : 'stark eingeschränkt'}`,
+      f.aw_ulbt && f.aw_ulbt !== '1' && `ULBT ${f.aw_ulbt}`,
+    ].filter(Boolean)
+    if (awParts.length) L.push(awParts.join(' · '))
+    const physSigns = [
+      f.aw_beard && 'Bart',
+      f.aw_shortNeck && 'Kurzer Hals',
+      f.aw_micrognathia && 'Mikrognathie',
+      f.aw_obese && 'Adipositas',
+      f.aw_previousDifficult && '⚠ Vorbekannter schwieriger AW',
+    ].filter(Boolean)
+    if (physSigns.length) L.push(physSigns.join(', '))
+    L.push(`→ ${awLabel.text}`)
+    if (f.aw_notes) L.push(`Notiz: ${f.aw_notes}`)
+    L.push('')
+  }
+
+  // Noxen — nur wenn positiv
+  if (f.nox_smoking || f.nox_exSmoker || f.nox_alcohol || f.nox_drugs) {
+    L.push('NOXEN')
+    if (f.nox_smoking && py !== null) L.push(`Raucher: ${f.nox_cigPerDay} Zig/Tag, ${f.nox_smokingYears} J. = ${py} py`)
+    else if (f.nox_exSmoker) L.push(`Ex-Raucher seit ${f.nox_exSmokerSince || 'unbekannt'}`)
+    if (f.nox_alcohol) L.push(`Alkohol: ${f.nox_alcoholGPerWeek || 'n.a.'} g/Woche`)
+    if (f.nox_drugs) L.push(`Drogen: ${f.nox_drugsText || 'vorhanden, n.a.'}`)
+    L.push('')
+  }
+
+  // Reflux — nur wenn positiv
+  if (f.reflux_heartburn || f.reflux_atRest || f.reflux_regurgitation) {
+    const rf = [
+      f.reflux_heartburn && 'Sodbrennen',
+      f.reflux_atRest && 'Reflux im Flachliegen',
+      f.reflux_regurgitation && 'Regurgitation',
+    ].filter(Boolean)
+    L.push(`REFLUX: ${rf.join(', ')}`)
+    L.push('')
+  }
+
+  // Blutung / Gerinnung — nur wenn relevant
+  if (coag.needed) {
+    L.push(`BLUTUNG / GERINNUNG: ${coag.reason}`)
+    L.push('')
+  }
+
+  // Risikostratifizierung
+  L.push('RISIKOSTRATIFIZIERUNG')
+  const rcriPos = rcriPositiveItems(f)
+  L.push(`RCRI ${rcri}/6 → MACE ${rcriR.pct} (${rcriR.label})${rcriPos.length ? ' | ' + rcriPos.join(', ') : ''}`)
+  if (f.cfs > 0) L.push(`CFS ${f.cfs}/9 — ${CFS_LABELS[f.cfs]}`)
+  if (ariscat !== null) { const ar = ariscatRisk(ariscat); L.push(`ARISCAT ${ariscat} Pkt. → pulm. Risiko ${ar.pct} (${ar.label})`) }
+  if (sb >= 3) L.push(`STOP-BANG ${sb}/8 → OSA-Risiko ${stopBangRisk(sb).label}`)
+  if (pf !== null) { const pfR = penFastRisk(pf); L.push(`PEN-FAST ${pf}/5 → Penicillin-IgE ${pfR.pct} (${pfR.label})`) }
+
+  // Delirium-Screening — nur bei Alter ≥65 J. oder vorhandenen Risikofaktoren
+  const showDelirium = (!isNaN(age) && age >= 65) || f.cfs >= 5 || isar > 0 ||
+    f.delir_knownDementia || f.delir_prevDelirium || (!isNaN(amtsV) && amtsV <= 6)
+  if (showDelirium) {
+    const delirParts = [`ISAR ${isar}/6`]
+    if (!isNaN(amtsV)) delirParts.push(`AMTS ${amtsV}/10${amtsV <= 6 ? ' ⚠' : ''}`)
+    if (f.delir_knownDementia) delirParts.push('Demenz')
+    if (f.delir_prevDelirium) delirParts.push('Delir-Anamnese')
+    L.push(`POD-Risiko: ${dr.label} | ${delirParts.join(', ')}`)
+  }
+  L.push('')
+
+  // Nüchternheitskarte
+  L.push(`NÜCHTERNHEITSKARTE: ${FASTING_CARD_INFO[fc].label}`)
+  L.push('')
+
+  // Empfehlungen
   if (recs.length) {
     L.push('EMPFEHLUNGEN')
-    L.push(sep)
     recs.forEach(r => L.push(`• ${r}`))
     L.push('')
   }
 
   L.push(sep)
-  L.push('ESC/ESA 2022 · DGAI/BDA 2024 · DGAI Anämie 2023')
+  L.push('ESC/ESA 2022 · DGAI/BDA 2024 · DGAI Anämie 2023 · notfallakademie.org')
 
   return L.join('\n')
 }
