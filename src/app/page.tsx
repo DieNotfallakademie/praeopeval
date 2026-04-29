@@ -17,6 +17,7 @@ import {
   calcISAR, delirRisk,
 } from '@/lib/scoring'
 import MedicationSearch from '@/components/MedicationSearch'
+import DiagnosticsGuide from '@/components/DiagnosticsGuide'
 
 // ── Base UI ───────────────────────────────────────────────────────────────────
 
@@ -94,6 +95,7 @@ export default function PraeopEval() {
   const [resultTab, setResultTab] = useState<'assessment' | 'protocol'>('assessment')
   const [copied, setCopied] = useState(false)
   const [medOpen, setMedOpen] = useState(false)
+  const [diagOpen, setDiagOpen] = useState(false)
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm(prev => ({ ...prev, [key]: value }))
@@ -1078,13 +1080,23 @@ export default function PraeopEval() {
         </div>
       </div>
 
-      {/* Floating medication search button */}
-      <button onClick={() => setMedOpen(true)}
-        className="fixed bottom-20 right-3 z-50 bg-teal-600 text-white rounded-full px-4 py-2.5 flex items-center gap-2 shadow-lg hover:bg-teal-700 transition-colors text-sm font-semibold"
-        title="Medikamenten-Suche">
-        <Pill className="w-4 h-4 flex-shrink-0" />
-        <span>Medikamente</span>
-      </button>
+      {/* Floating buttons */}
+      <div className="fixed bottom-20 right-3 z-50 flex flex-col items-end gap-2">
+        <button onClick={() => setDiagOpen(true)}
+          className="bg-indigo-600 text-white rounded-full px-4 py-2.5 flex items-center gap-2 shadow-lg hover:bg-indigo-700 transition-colors text-sm font-semibold"
+          title="Diagnostik-Check">
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          </svg>
+          <span>Diagnostik</span>
+        </button>
+        <button onClick={() => setMedOpen(true)}
+          className="bg-teal-600 text-white rounded-full px-4 py-2.5 flex items-center gap-2 shadow-lg hover:bg-teal-700 transition-colors text-sm font-semibold"
+          title="Medikamenten-Suche">
+          <Pill className="w-4 h-4 flex-shrink-0" />
+          <span>Medikamente</span>
+        </button>
+      </div>
 
       {/* Medication search drawer */}
       {medOpen && (
@@ -1099,6 +1111,27 @@ export default function PraeopEval() {
             </div>
             <div className="flex-1 overflow-y-auto p-4">
               <MedicationSearch />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Diagnostics drawer */}
+      {diagOpen && (
+        <div className="fixed inset-0 z-[60] flex justify-end">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setDiagOpen(false)} />
+          <div className="relative w-full max-w-sm bg-white h-full flex flex-col shadow-xl">
+            <div className="bg-indigo-700 text-white px-4 py-3 flex items-center justify-between">
+              <div>
+                <span className="font-semibold text-sm">Diagnostik-Check</span>
+                <p className="text-indigo-300 text-xs mt-0.5">Für den aktuellen Patienten</p>
+              </div>
+              <button onClick={() => setDiagOpen(false)} className="text-indigo-200 hover:text-white p-0.5">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <DiagnosticsGuide form={form} rcri={rcri} ariscat={ariscat} />
             </div>
           </div>
         </div>
