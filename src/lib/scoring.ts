@@ -293,7 +293,7 @@ export function needsCoagulationWorkup(f: FormState): { needed: boolean; reason:
 // ── Empfohlene Diagnostik ─────────────────────────────────────────────────────
 export interface DiagnosticRec { name: string; recommended: boolean; reason: string }
 
-export function buildDiagnostics(f: FormState, rcri: number, ariscat: number | null): DiagnosticRec[] {
+export function buildDiagnostics(f: FormState, rcri: number, _ariscat: number | null): DiagnosticRec[] {
   const age = parseInt(f.age)
   const hb = parseFloat(f.hemoglobin)
   const cr = parseFloat(f.creatinine)
@@ -403,6 +403,34 @@ export function buildDiagnostics(f: FormState, rcri: number, ariscat: number | n
   ]
 }
 
+// ── PONV-Risiko (Apfel-Score) ─────────────────────────────────────────────────
+export interface ApfelResult {
+  score: number
+  pct: string
+  level: 'low' | 'intermediate' | 'high'
+  factors: string[]
+}
+
+export function calcApfel(f: FormState): ApfelResult {
+  const factors: string[] = []
+  let score = 0
+  if (f.sex === 'female') { score++; factors.push('Weibliches Geschlecht') }
+  if (!f.nox_smoking) { score++; factors.push('Nichtraucher/in') }
+  if (f.prev_ponv) { score++; factors.push('PONV-/Reisekrankheitsanamnese') }
+  if (f.surgicalRisk === 'intermediate' || f.surgicalRisk === 'high') {
+    score++; factors.push('Postop. Opioide wahrscheinlich')
+  }
+  const pcts = ['~10 %', '~21 %', '~39 %', '~61 %', '~79 %']
+  const level: ApfelResult['level'] = score <= 1 ? 'low' : score <= 2 ? 'intermediate' : 'high'
+  return { score, pct: pcts[Math.min(score, 4)], level, factors }
+}
+
+export function apfelRisk(level: ApfelResult['level']): string {
+  if (level === 'low') return 'niedrig'
+  if (level === 'intermediate') return 'moderat'
+  return 'hoch'
+}
+
 // ── Anämie-Empfehlungen ───────────────────────────────────────────────────────
 export function anaemiaLines(hb: number, sex: 'male'|'female'|''): string[] {
   const thr = sex === 'male' ? 13.0 : 12.0
@@ -483,15 +511,21 @@ export function buildRecommendations(f: FormState, rcri: number, ariscat: number
   if (f.prev_familyMH) recs.push('⚠ MALIGNE HYPERTHERMIE: Familienanamnese positiv — triggerfreie Anästhesie obligat, Dantrolene verfügbar halten, MH-Zentrum informieren')
   if (f.prev_difficultAirway || f.aw_previousDifficult) recs.push('⚠ Vorbekannter schwieriger Atemweg: erweiterte Atemwegs-Vorbereitung obligat (Videolaryngoskopie, fiberoptische Intubation bereithalten, Awake-Intubation erwägen)')
 
+  const apfel = calcApfel(f)
+  if (apfel.level === 'high') {
+    recs.push(`PONV-Hochrisiko (Apfel ${apfel.score}/4, ${apfel.pct}): Multimodale Prophylaxe obligat — Ondansetron + Dexamethason; TIVA erwägen (DGAI 2024)`)
+  } else if (apfel.level === 'intermediate') {
+    recs.push(`PONV-Risiko moderat (Apfel ${apfel.score}/4, ${apfel.pct}): 1–2 Antiemetika empfohlen (Ondansetron und/oder Dexamethason)`)
+  }
+
   return recs
 }
 
 // ── Protokolltext (copy-paste) ────────────────────────────────────────────────
 export function generateProtocolText(f: FormState): string {
   const today = new Date().toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' })
-  const age = parseInt(f.age), w = parseFloat(f.weight), h = parseFloat(f.height)
+  const age = parseInt(f.age)
   const cr = parseFloat(f.creatinine), hb = parseFloat(f.hemoglobin)
-  const bmi = !isNaN(w) && !isNaN(h) ? calcBMI(w, h) : null
   const egfr = !isNaN(cr) && !isNaN(age) && f.sex ? calcEGFR(cr, age, f.sex) : null
   const py = calcPackYears(f.nox_cigPerDay, f.nox_smokingYears)
   const rcri = calcRCRI(f)
@@ -499,12 +533,11 @@ export function generateProtocolText(f: FormState): string {
   const ariscat = calcARISCAT(f)
   const sb = calcSTOPBANG(f)
   const pf = calcPENFAST(f)
+  const apfel = calcApfel(f)
   const recs = buildRecommendations(f, rcri, ariscat, sb)
   const coag = needsCoagulationWorkup(f)
   const fc = determineFastingCard(f)
-  const awScore = difficultAirwayScore(f)
-  const awLabel = difficultAirwayLabel(awScore)
-  const sx = f.sex === 'male' ? '♂' : f.sex === 'female' ? '♀' : ''
+  const awLabel = difficultAirwayLabel(difficultAirwayScore(f))
   const isar = calcISAR(f)
   const dr = delirRisk(f, isar)
   const amtsV = parseInt(f.delir_amts)
@@ -514,24 +547,6 @@ export function generateProtocolText(f: FormState): string {
   L.push('PRÄMEDIKATIONSPROTOKOLL')
   L.push(`Datum: ${today}`)
   L.push(sep)
-
-  // Patient (kompakt, eine Zeile)
-  const patParts = [
-    f.age && `${f.age} J.`, sx,
-    !isNaN(w) && `${w} kg`, !isNaN(h) && `${h} cm`,
-    bmi && `BMI ${bmi}`, f.asa && `ASA ${f.asa}`,
-  ].filter(Boolean)
-  L.push(patParts.join(' | '))
-  const labParts = [
-    !isNaN(cr) && `Krea ${cr} mg/dL`,
-    egfr && `eGFR ${egfr} ml/min`,
-    !isNaN(hb) && `Hb ${hb.toFixed(1)} g/dL${f.sex && isAnaemia(hb, f.sex) ? ' ⚠ Anämie' : ''}`,
-    f.hba1c && `HbA1c ${f.hba1c} %`,
-    f.ntprobnp && `NT-proBNP ${f.ntprobnp} ng/L`,
-    f.bnp && `BNP ${f.bnp} ng/L`,
-  ].filter(Boolean)
-  if (labParts.length) L.push(labParts.join(' | '))
-  L.push('')
 
   // Eingriff
   L.push(f.surgeryDescription || 'Eingriff nicht angegeben')
@@ -544,54 +559,92 @@ export function generateProtocolText(f: FormState): string {
     f.emergencyClass && f.emergencyClass !== 'elective' && `Dringlichkeit: ${f.emergencyClass}`,
   ].filter(Boolean)
   if (surParts.length) L.push(surParts.join(' · '))
+
+  // Labor — nur wenn Werte vorhanden
+  const labParts = [
+    !isNaN(cr) && `Krea ${cr} mg/dL`,
+    egfr && `eGFR ${egfr} ml/min`,
+    !isNaN(hb) && `Hb ${hb.toFixed(1)} g/dL${f.sex && isAnaemia(hb, f.sex) ? ' ⚠ Anämie' : ''}`,
+    f.hba1c && `HbA1c ${f.hba1c} %`,
+    f.ntprobnp && `NT-proBNP ${f.ntprobnp} ng/L`,
+    f.bnp && `BNP ${f.bnp} ng/L`,
+  ].filter(Boolean)
+  if (labParts.length) L.push(labParts.join(' | '))
   L.push('')
 
-  // Anästhesie-Vorgeschichte — nur wenn relevant
-  const hasPrevRelevant = f.prev_hadGA || f.prev_familyMH || f.prev_familyPseudocholin || f.prev_familyOther
-  if (hasPrevRelevant) {
-    L.push('ANÄSTHESIE-VORGESCHICHTE')
-    if (f.prev_hadGA) {
-      const comps = [
-        f.prev_ponv && 'PONV',
-        f.prev_difficultAirway && 'Schwieriger Atemweg',
-        f.prev_awareness && 'Awareness',
-        f.prev_otherComplication,
-      ].filter(Boolean).join(', ')
-      L.push(`Vorige Narkose (${f.prev_year || 'Jahr unbek.'}): ${f.prev_wellTolerated ? 'komplikationslos' : 'Komplikationen — ' + comps}`)
-    }
-    if (f.prev_familyMH) L.push('⚠ Familienanamnese: MALIGNE HYPERTHERMIE — triggerfreie Anästhesie obligat!')
-    if (f.prev_familyPseudocholin) L.push('Familienanamnese: Pseudocholinesterasemangel')
-    if (f.prev_familyOther) L.push(`Familienanamnese: ${f.prev_familyOther}`)
-    L.push('')
+  // Anamnese — Pflichtfelder, immer dokumentiert (auch wenn negativ)
+  L.push('ANAMNESE')
+
+  // Allergien — immer
+  if (f.pf_hasPenicillinAllergy && pf !== null) {
+    const pfR = penFastRisk(pf)
+    L.push(`Allergien: Penicillin-Allergie (PEN-FAST ${pf}/5 — ${pfR.label}, IgE-vermittelt ${pfR.pct})`)
+  } else {
+    L.push('Allergien: Keine bekannten Medikamentenallergien')
   }
 
-  // Atemweg — nur wenn Befunde vorhanden
-  const hasAirwayFindings = f.aw_mallampati || f.aw_mouthOpening || f.aw_tmd || f.aw_reklination ||
-    f.aw_ulbt || f.aw_beard || f.aw_shortNeck || f.aw_micrognathia || f.aw_obese ||
-    f.aw_previousDifficult || f.aw_notes
-  if (hasAirwayFindings) {
-    L.push('ATEMWEG')
-    const awParts = [
-      f.aw_mallampati && `Mallampati ${f.aw_mallampati}`,
-      f.aw_mouthOpening && f.aw_mouthOpening !== '>4cm' && `Mundöffnung ${f.aw_mouthOpening}`,
-      f.aw_tmd && f.aw_tmd !== '>6.5cm' && `TMA ${f.aw_tmd}`,
-      f.aw_reklination && f.aw_reklination !== 'normal' &&
-        `Reklination ${f.aw_reklination === 'limited' ? 'eingeschränkt' : 'stark eingeschränkt'}`,
-      f.aw_ulbt && f.aw_ulbt !== '1' && `ULBT ${f.aw_ulbt}`,
-    ].filter(Boolean)
-    if (awParts.length) L.push(awParts.join(' · '))
-    const physSigns = [
-      f.aw_beard && 'Bart',
-      f.aw_shortNeck && 'Kurzer Hals',
-      f.aw_micrognathia && 'Mikrognathie',
-      f.aw_obese && 'Adipositas',
-      f.aw_previousDifficult && '⚠ Vorbekannter schwieriger AW',
-    ].filter(Boolean)
-    if (physSigns.length) L.push(physSigns.join(', '))
-    L.push(`→ ${awLabel.text}`)
-    if (f.aw_notes) L.push(`Notiz: ${f.aw_notes}`)
-    L.push('')
+  // Vornarkosen — immer
+  if (f.prev_hadGA) {
+    const comps = [
+      f.prev_ponv && 'PONV',
+      f.prev_difficultAirway && 'Schwieriger Atemweg',
+      f.prev_awareness && 'Awareness',
+      f.prev_otherComplication,
+    ].filter(Boolean).join(', ')
+    const outcome = f.prev_wellTolerated ? 'gut vertragen' : `Komplikationen: ${comps || 'n.a.'}`
+    L.push(`Vornarkosen: Ja${f.prev_year ? ' (' + f.prev_year + ')' : ''} — ${outcome}`)
+  } else {
+    L.push('Vornarkosen: Keine')
   }
+
+  // Familiäre Anästhesieanamnese — immer
+  const famDetails = [
+    f.prev_familyMH && '⚠ MALIGNE HYPERTHERMIE',
+    f.prev_familyPseudocholin && 'Pseudocholinesterasemangel',
+    f.prev_familyOther,
+  ].filter(Boolean).join(', ')
+  L.push(`Familiäre Anästhesieanamnese: ${famDetails || 'Keine Besonderheiten'}`)
+
+  // Sodbrennen/Reflux — immer
+  const refluxDetails = [
+    f.reflux_heartburn && 'Sodbrennen/GERD',
+    f.reflux_mealIndependent && 'mahlzeitenunabhängig',
+    f.reflux_nocturnalCough && 'nächtlicher Husten',
+    f.reflux_atRest && 'Reflux im Flachliegen',
+    f.reflux_regurgitation && 'Regurgitation',
+  ].filter(Boolean).join(', ')
+  L.push(`Sodbrennen/Reflux: ${refluxDetails || 'Kein Anhalt'}`)
+
+  // Gerinnungsanamnese — immer
+  L.push(`Gerinnungsanamnese: ${coag.needed ? coag.reason : 'Unauffällig (keine Routinediagnostik erforderlich, DGAI 2024)'}`)
+
+  L.push('')
+
+  // Atemweg — IMMER mit allen Pflichtparametern
+  L.push('ATEMWEG')
+  const mpLabel = f.aw_mallampati ? `Mallampati ${f.aw_mallampati}` : 'Mallampati n.b.'
+  const moLabel = f.aw_mouthOpening
+    ? `Mundöffnung ${f.aw_mouthOpening === '>4cm' ? '>4 cm' : f.aw_mouthOpening === '3-4cm' ? '3–4 cm' : '<3 cm'}`
+    : 'Mundöffnung n.b.'
+  const tmdLabel = f.aw_tmd
+    ? `TMA ${f.aw_tmd === '>6.5cm' ? '>6,5 cm' : f.aw_tmd === '6-6.5cm' ? '6–6,5 cm' : '<6 cm'}`
+    : 'TMA n.b.'
+  const rekLabel = f.aw_reklination
+    ? `Reklination ${f.aw_reklination === 'normal' ? 'frei' : f.aw_reklination === 'limited' ? 'eingeschränkt' : 'stark eingeschränkt'}`
+    : 'Reklination n.b.'
+  const ulbtLabel = f.aw_ulbt ? `ULBT ${f.aw_ulbt}` : 'ULBT n.b.'
+  L.push(`${mpLabel} | ${moLabel} | ${tmdLabel} | ${rekLabel} | ${ulbtLabel}`)
+  const physSigns = [
+    f.aw_beard && 'Bart',
+    f.aw_shortNeck && 'Kurzer Hals',
+    f.aw_micrognathia && 'Mikrognathie',
+    f.aw_obese && 'Adipositas',
+    f.aw_previousDifficult && '⚠ Vorbekannter schwieriger AW',
+  ].filter(Boolean)
+  if (physSigns.length) L.push(physSigns.join(', '))
+  L.push(`→ ${awLabel.text}`)
+  if (f.aw_notes) L.push(`Notiz: ${f.aw_notes}`)
+  L.push('')
 
   // Noxen — nur wenn positiv
   if (f.nox_smoking || f.nox_exSmoker || f.nox_alcohol || f.nox_drugs) {
@@ -603,35 +656,24 @@ export function generateProtocolText(f: FormState): string {
     L.push('')
   }
 
-  // Reflux — nur wenn positiv
-  if (f.reflux_heartburn || f.reflux_atRest || f.reflux_regurgitation) {
-    const rf = [
-      f.reflux_heartburn && 'Sodbrennen/GERD',
-      f.reflux_mealIndependent && 'mahlzeitenunabhängig',
-      f.reflux_nocturnalCough && 'nächtliche Hustenanfälle',
-      f.reflux_atRest && 'Reflux im Flachliegen',
-      f.reflux_regurgitation && 'Regurgitation',
-    ].filter(Boolean)
-    L.push(`REFLUX: ${rf.join(', ')}`)
-    L.push('')
-  }
-
-  // Blutung / Gerinnung — nur wenn relevant
-  if (coag.needed) {
-    L.push(`BLUTUNG / GERINNUNG: ${coag.reason}`)
-    L.push('')
-  }
-
-  // Risikostratifizierung
+  // Risikostratifizierung — IMMER (kardial + pulmonal + PONV)
   L.push('RISIKOSTRATIFIZIERUNG')
   const rcriPos = rcriPositiveItems(f)
-  L.push(`RCRI ${rcri}/6 → MACE ${rcriR.pct} (${rcriR.label})${rcriPos.length ? ' | ' + rcriPos.join(', ') : ''}`)
-  if (f.cfs > 0) L.push(`CFS ${f.cfs}/9 — ${CFS_LABELS[f.cfs]}`)
-  if (ariscat !== null) { const ar = ariscatRisk(ariscat); L.push(`ARISCAT ${ariscat} Pkt. → pulm. Risiko ${ar.pct} (${ar.label})`) }
-  if (sb >= 3) L.push(`STOP-BANG ${sb}/8 → OSA-Risiko ${stopBangRisk(sb).label}`)
-  if (pf !== null) { const pfR = penFastRisk(pf); L.push(`PEN-FAST ${pf}/5 → Penicillin-IgE ${pfR.pct} (${pfR.label})`) }
+  L.push(`Kardial (RCRI ${rcri}/6): MACE ${rcriR.pct} — ${rcriR.label}${rcriPos.length ? ' | ' + rcriPos.join(', ') : ''}`)
 
-  // Delirium-Screening — nur bei Alter ≥65 J. oder vorhandenen Risikofaktoren
+  if (ariscat !== null) {
+    const ar = ariscatRisk(ariscat)
+    L.push(`Pulmonal (ARISCAT ${ariscat} Pkt.): ${ar.pct} — ${ar.label}`)
+  } else {
+    L.push('Pulmonal (ARISCAT): Daten unvollständig — SpO₂, OP-Ort oder OP-Dauer nicht angegeben')
+  }
+
+  L.push(`PONV (Apfel ${apfel.score}/4): ${apfel.pct} — ${apfelRisk(apfel.level)}${apfel.factors.length ? ' | ' + apfel.factors.join(', ') : ''}`)
+
+  // Frailty — wenn bewertet
+  if (f.cfs > 0) L.push(`Frailty (CFS ${f.cfs}/9): ${CFS_LABELS[f.cfs]}`)
+
+  // Delirium — bei Risikoalter (≥65 J.) oder auffälliger Anamnese
   const showDelirium = (!isNaN(age) && age >= 65) || f.cfs >= 5 || isar > 0 ||
     f.delir_knownDementia || f.delir_prevDelirium || (!isNaN(amtsV) && amtsV <= 6)
   if (showDelirium) {
@@ -641,6 +683,8 @@ export function generateProtocolText(f: FormState): string {
     if (f.delir_prevDelirium) delirParts.push('Delir-Anamnese')
     L.push(`POD-Risiko: ${dr.label} | ${delirParts.join(', ')}`)
   }
+
+  if (sb >= 3) L.push(`STOP-BANG ${sb}/8 → OSA-Risiko ${stopBangRisk(sb).label}`)
   L.push('')
 
   // Nüchternheitskarte
@@ -670,7 +714,6 @@ export interface AssessmentItem {
 export function buildAssessmentItems(f: FormState, rcri: number, ariscat: number|null, sb: number): AssessmentItem[] {
   const items: AssessmentItem[] = []
   const diags = buildDiagnostics(f, rcri, ariscat)
-  const recs = buildRecommendations(f, rcri, ariscat, sb)
   const hb = parseFloat(f.hemoglobin)
 
   if (hasActiveCardiacCondition(f)) items.push({ category: 'Kardial', text: 'AKTIVE KARDIALE BEDINGUNG: Kardiologie SOFORT konsultieren — elektive OP pausieren', urgency: 'critical' })
@@ -716,6 +759,13 @@ export function buildAssessmentItems(f: FormState, rcri: number, ariscat: number
   const fc = determineFastingCard(f)
   const fcInfo = FASTING_CARD_INFO[fc]
   items.push({ category: 'Nüchternheitskarte', text: `${fcInfo.label}: ${fcInfo.description}`, urgency: fc === 'red' ? 'critical' : fc === 'yellow' ? 'high' : 'info' })
+
+  const apfel = calcApfel(f)
+  if (apfel.level === 'high') {
+    items.push({ category: 'PONV', text: `Apfel ${apfel.score}/4 (${apfel.pct}): Hohes PONV-Risiko | ${apfel.factors.join(', ')} → Multimodale Prophylaxe + TIVA erwägen`, urgency: 'high' })
+  } else if (apfel.level === 'intermediate') {
+    items.push({ category: 'PONV', text: `Apfel ${apfel.score}/4 (${apfel.pct}): Moderates PONV-Risiko | ${apfel.factors.join(', ')} → 1–2 Antiemetika`, urgency: 'medium' })
+  }
 
   return items
 }

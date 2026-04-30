@@ -30,8 +30,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-const inp = 'w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
-const warnInp = 'w-full border border-red-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-red-50'
+const inp = 'w-full border border-slate-300 rounded-xl px-3 py-2.5 text-[16px] focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
+const warnInp = 'w-full border border-red-300 rounded-xl px-3 py-2.5 text-[16px] focus:outline-none focus:ring-2 focus:ring-red-400 bg-red-50'
 const sel = inp
 
 function CheckRow({ label, checked, onChange, description, warn }: {
