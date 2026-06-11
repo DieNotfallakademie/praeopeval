@@ -1,14 +1,17 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
-import { Copy, Check, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, AlertCircle, AlertTriangle, Info, Pill, X, MessageSquare } from 'lucide-react'
+import {
+  Copy, Check, RotateCcw, ChevronLeft, ChevronRight, ChevronDown,
+  AlertCircle, AlertTriangle, Info, Pill, X, MessageSquare, Zap, List,
+} from 'lucide-react'
 import clsx from 'clsx'
 import { FormState, defaultFormState } from '@/lib/types'
 import {
   calcRCRI, rcriRisk, calcARISCAT, ariscatRisk, calcSTOPBANG, stopBangRisk,
   calcPENFAST, penFastRisk, calcBMI, calcEGFR, isAnaemia,
-  CFS_LABELS, CFS_DESCRIPTIONS, cfsRisk,
+  CFS_LABELS, CFS_DESCRIPTIONS,
   hasActiveCardiacCondition, evaluateStentTiming, stressTestIndication,
   needsCoagulationWorkup, calcPackYears,
   difficultAirwayScore, difficultAirwayLabel,
@@ -16,12 +19,27 @@ import {
   determineFastingCard, FASTING_CARD_INFO,
   generateProtocolText, buildAssessmentItems,
   calcISAR, delirRisk,
+  getCoagulationTiming, calcPediatricPremed,
 } from '@/lib/scoring'
 import MedicationSearch from '@/components/MedicationSearch'
 import DiagnosticsGuide from '@/components/DiagnosticsGuide'
 
-// ── Base UI ───────────────────────────────────────────────────────────────────
+// ── Konstanten ────────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'praeopeval_v3'
+const STORAGE_STEP = 'praeopeval_step_v3'
 
+const STEP_TITLES = [
+  'Patient & Eingriff',
+  'Kardiales Risiko',
+  'RCRI & Gebrechlichkeit',
+  'Vorgeschichte & Atemweg',
+  'Noxen & Reflux',
+  'Blutung & Medikation',
+  'Pulmonales Risiko & Allergie',
+  'Nüchternheitskarte',
+]
+
+// ── Base UI ───────────────────────────────────────────────────────────────────
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -101,35 +119,57 @@ function CollapsibleSection({
   )
 }
 
-const STEP_TITLES = [
-  'Patient & Eingriff',
-  'Kardiales Risiko',
-  'RCRI & Gebrechlichkeit',
-  'Vorgeschichte & Atemweg',
-  'Noxen & Reflux',
-  'Blutung & Medikation',
-  'Pulmonales Risiko & Allergie',
-  'Nüchternheitskarte',
-]
-
 // ── Main ──────────────────────────────────────────────────────────────────────
-
 export default function PraeopEval() {
-  const [form, setForm] = useState<FormState>(defaultFormState)
-  const [step, setStep] = useState(0)
+  const [form, setForm] = useState<FormState>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY)
+        if (saved) return { ...defaultFormState, ...JSON.parse(saved) }
+      } catch { /* ignore */ }
+    }
+    return defaultFormState
+  })
+  const [step, setStep] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const s = parseInt(localStorage.getItem(STORAGE_STEP) ?? '0')
+      return isNaN(s) ? 0 : s
+    }
+    return 0
+  })
+  const [expressMode, setExpressMode] = useState(false)
   const [resultTab, setResultTab] = useState<'assessment' | 'protocol'>('assessment')
   const [copied, setCopied] = useState(false)
+  const [savedFlash, setSavedFlash] = useState(false)
   const [medOpen, setMedOpen] = useState(false)
   const [diagOpen, setDiagOpen] = useState(false)
+
+  // Auto-save
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(form))
+    setSavedFlash(true)
+    const t = setTimeout(() => setSavedFlash(false), 1200)
+    return () => clearTimeout(t)
+  }, [form])
+  useEffect(() => {
+    localStorage.setItem(STORAGE_STEP, String(step))
+  }, [step])
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm(prev => ({ ...prev, [key]: value }))
   }
 
   function reset() {
-    if (confirm('Alle Eingaben zurücksetzen?')) { setForm(defaultFormState); setStep(0) }
+    if (confirm('Alle Eingaben zurücksetzen?')) {
+      setForm(defaultFormState)
+      setStep(0)
+      setExpressMode(false)
+      localStorage.removeItem(STORAGE_KEY)
+      localStorage.removeItem(STORAGE_STEP)
+    }
   }
 
+  // Derived values
   const age = parseInt(form.age)
   const weight = parseFloat(form.weight)
   const height = parseFloat(form.height)
@@ -141,6 +181,14 @@ export default function PraeopEval() {
   const bmi = !isNaN(weight) && !isNaN(height) ? calcBMI(weight, height) : null
   const egfr = !isNaN(cr) && !isNaN(age) && form.sex ? calcEGFR(cr, age, form.sex) : null
   const packYears = calcPackYears(form.nox_cigPerDay, form.nox_smokingYears)
+
+  const isPediatric = !isNaN(age) && age <= 14
+  const isYoungChild = !isNaN(age) && age <= 10
+  const pediatricPremed = useMemo(() => {
+    if (!isNaN(age) && !isNaN(weight) && age <= 14 && weight > 0)
+      return calcPediatricPremed(weight, age)
+    return null
+  }, [age, weight])
 
   const rcri = useMemo(() => calcRCRI(form), [form])
   const rcriR = useMemo(() => rcriRisk(rcri), [rcri])
@@ -163,6 +211,7 @@ export default function PraeopEval() {
   const fastingCard = useMemo(() => determineFastingCard(form), [form])
   const protocolText = useMemo(() => generateProtocolText(form), [form])
   const assessmentItems = useMemo(() => buildAssessmentItems(form, rcri, ariscat, sbScore), [form, rcri, ariscat, sbScore])
+  const coagTiming = useMemo(() => form.anticoag_substance ? getCoagulationTiming(form.anticoag_substance, egfr) : null, [form.anticoag_substance, egfr])
 
   async function copyProtocol() {
     await navigator.clipboard.writeText(protocolText)
@@ -171,6 +220,7 @@ export default function PraeopEval() {
   }
 
   const isResult = step === 8
+  const showStep = (n: number) => expressMode ? !isResult : step === n
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
@@ -181,22 +231,62 @@ export default function PraeopEval() {
           <h1 className="text-base font-bold tracking-tight">Präoperative Evaluation</h1>
           <p className="text-blue-300 text-xs">ESC 2022 · DGAI 2024</p>
         </div>
-        <button onClick={reset} className="text-blue-300 hover:text-white transition-colors p-1" title="Neue Evaluation">
-          <RotateCcw className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          {savedFlash && !expressMode && (
+            <span className="text-blue-300 text-xs flex items-center gap-1">
+              <Check className="w-3 h-3" /> gespeichert
+            </span>
+          )}
+          {!isResult && (
+            <button
+              onClick={() => setExpressMode(m => !m)}
+              className={clsx('flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg font-semibold transition-colors',
+                expressMode ? 'bg-amber-500 text-white' : 'bg-blue-700 text-blue-200 hover:text-white'
+              )}
+              title="Express-Modus"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              Express
+            </button>
+          )}
+          <button onClick={reset} className="text-blue-300 hover:text-white transition-colors p-1" title="Neue Evaluation">
+            <RotateCcw className="w-4 h-4" />
+          </button>
+        </div>
       </header>
 
-      {/* Progress bar */}
-      {!isResult && (
+      {/* Progress bar + Step-Dots (nur im Schritt-Modus) */}
+      {!isResult && !expressMode && (
         <div className="bg-white px-4 pt-3 pb-2 border-b border-slate-200 sticky top-[57px] z-40">
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-xs font-semibold text-slate-700">{STEP_TITLES[step]}</span>
             <span className="text-xs text-slate-400">Schritt {step + 1} / 8</span>
           </div>
-          <div className="w-full bg-slate-200 rounded-full h-1.5">
+          <div className="w-full bg-slate-200 rounded-full h-1.5 mb-2">
             <div className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
               style={{ width: `${((step + 1) / 8) * 100}%` }} />
           </div>
+          {/* Clickable step dots */}
+          <div className="flex items-center justify-center gap-1.5">
+            {STEP_TITLES.map((title, i) => (
+              <button
+                key={i}
+                onClick={() => setStep(i)}
+                title={title}
+                className={clsx('transition-all rounded-full',
+                  i === step ? 'w-6 h-2 bg-blue-600' :
+                  i < step ? 'w-2 h-2 bg-blue-400' :
+                  'w-2 h-2 bg-slate-300 hover:bg-slate-400'
+                )}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {!isResult && expressMode && (
+        <div className="bg-amber-500 text-white px-4 py-2 sticky top-[57px] z-40 flex items-center gap-2">
+          <Zap className="w-3.5 h-3.5" />
+          <span className="text-xs font-semibold">Express-Modus — alle Schritte auf einer Seite</span>
         </div>
       )}
 
@@ -205,12 +295,24 @@ export default function PraeopEval() {
         <div className="max-w-2xl mx-auto px-4 py-5 pb-28 space-y-4">
 
           {/* ── STEP 0: Patient + Eingriff ───────────────────────────────── */}
-          {step === 0 && <>
+          {showStep(0) && <>
+            {expressMode && <SecHeader title="1 · Patient & Eingriff" color="blue" />}
+
+            {isPediatric && (
+              <div className="bg-violet-600 text-white rounded-2xl px-4 py-3 flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-bold text-sm">Pädiatrischer Patient {!isNaN(age) ? `(${age} Jahre)` : ''}</p>
+                  <p className="text-xs text-violet-200 mt-0.5">Geriatrische Scores (RCRI, CFS, ISAR, ARISCAT) nicht validiert. Pädiatrische Nüchternzeiten und Prämedikation beachten.</p>
+                </div>
+              </div>
+            )}
+
             <SecHeader title="Patientendaten" color="blue" />
             <div className="bg-white rounded-2xl p-4 space-y-3 shadow-sm">
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Alter (Jahre)">
-                  <input type="number" inputMode="numeric" min={18} max={120} value={form.age}
+                  <input type="number" inputMode="numeric" min={0} max={120} value={form.age}
                     onChange={e => set('age', e.target.value)} placeholder="72" className={inp} />
                 </Field>
                 <Field label="Geschlecht">
@@ -221,11 +323,11 @@ export default function PraeopEval() {
                   </select>
                 </Field>
                 <Field label="Gewicht (kg)">
-                  <input type="number" inputMode="numeric" min={30} max={300} value={form.weight}
+                  <input type="number" inputMode="numeric" min={3} max={300} value={form.weight}
                     onChange={e => set('weight', e.target.value)} placeholder="80" className={inp} />
                 </Field>
                 <Field label="Größe (cm)">
-                  <input type="number" inputMode="numeric" min={100} max={220} value={form.height}
+                  <input type="number" inputMode="numeric" min={50} max={220} value={form.height}
                     onChange={e => set('height', e.target.value)} placeholder="175" className={inp} />
                 </Field>
               </div>
@@ -350,10 +452,53 @@ export default function PraeopEval() {
                 </select>
               </Field>
             </div>
+
+            {/* Pädiatrische Prämedikation */}
+            {pediatricPremed && (
+              <CollapsibleSection
+                title={`Pädiatrische Prämedikation (${!isNaN(age) ? age + ' J., ' : ''}${!isNaN(weight) ? weight + ' kg' : ''})`}
+                defaultOpen
+                badge={<span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700">Kind</span>}
+              >
+                <div className="space-y-2">
+                  <div className="bg-violet-50 rounded-xl p-3 space-y-1.5">
+                    <p className="text-xs font-semibold text-violet-700 uppercase tracking-wider">Midazolam oral (0,4 mg/kg)</p>
+                    <p className="text-lg font-bold text-violet-900">
+                      {pediatricPremed.midazolam_oral_mg} mg
+                      <span className="text-sm font-normal text-violet-600 ml-2">= {pediatricPremed.midazolam_oral_ml} ml (5 mg/ml Sirup)</span>
+                    </p>
+                    <p className="text-xs text-violet-600">Max: {isYoungChild ? '10 mg (≤6 J.)' : '15 mg'} · 20–30 min vor Einleitung</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-3 space-y-1">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Alternative: Midazolam nasal (0,2 mg/kg)</p>
+                    <p className="text-sm font-bold text-slate-800">{pediatricPremed.midazolam_nasal_mg} mg intranasal (max 5 mg)</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-3 space-y-1">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Alternative: Clonidin oral (4 μg/kg)</p>
+                    <p className="text-sm font-bold text-slate-800">{pediatricPremed.clonidine_oral_ug} μg oral (max 150 μg) · 45–60 min vor Einleitung</p>
+                  </div>
+                  {pediatricPremed.notes.map((n, i) => (
+                    <p key={i} className="text-xs text-slate-500 flex items-start gap-1">
+                      <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-slate-400" />{n}
+                    </p>
+                  ))}
+                  <div className="bg-blue-50 rounded-xl p-3">
+                    <p className="text-xs font-semibold text-blue-700 mb-1">Pädiatrische Nüchternzeiten (ESAIC 2023)</p>
+                    <div className="text-xs text-blue-800 space-y-0.5">
+                      <p>Klare Flüssigkeiten: bis <strong>1 h</strong> vor OP</p>
+                      <p>Muttermilch: bis <strong>3 h</strong> vor OP</p>
+                      <p>Formula / Kuhmilch: bis <strong>4 h</strong> vor OP</p>
+                      <p>Leichte Mahlzeit / feste Speise: bis <strong>6 h</strong> vor OP</p>
+                    </div>
+                  </div>
+                </div>
+              </CollapsibleSection>
+            )}
           </>}
 
           {/* ── STEP 1: Kardiales Risiko ─────────────────────────────────── */}
-          {step === 1 && <>
+          {showStep(1) && <>
+            {expressMode && <SecHeader title="2 · Kardiales Risiko" color="red" />}
             {activeCardiac && (
               <div className="bg-red-600 text-white rounded-2xl px-4 py-3 flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
@@ -366,33 +511,25 @@ export default function PraeopEval() {
             <SecHeader title="Aktive kardiale Bedingungen — Stopp-Kriterien ESC 2022" color="red" />
             <div className="space-y-2">
               <CheckRow label="Instabile / schwere Angina pectoris" checked={form.activeCardiac_unstableAngina}
-                onChange={v => set('activeCardiac_unstableAngina', v)} warn
-                description="CCS III–IV oder Angina in Ruhe" />
+                onChange={v => set('activeCardiac_unstableAngina', v)} warn description="CCS III–IV oder Angina in Ruhe" />
               <CheckRow label="Herzinfarkt vor <60 Tagen" checked={form.activeCardiac_recentMI}
-                onChange={v => set('activeCardiac_recentMI', v)} warn
-                description="STEMI oder NSTEMI innerhalb der letzten 60 Tage" />
+                onChange={v => set('activeCardiac_recentMI', v)} warn description="STEMI oder NSTEMI innerhalb der letzten 60 Tage" />
               <CheckRow label="Dekompensierte Herzinsuffizienz" checked={form.activeCardiac_decompHF}
-                onChange={v => set('activeCardiac_decompHF', v)} warn
-                description="NYHA IV oder neu aufgetretenes Lungenödem" />
+                onChange={v => set('activeCardiac_decompHF', v)} warn description="NYHA IV oder neu aufgetretenes Lungenödem" />
               <CheckRow label="Signifikante Arrhythmie" checked={form.activeCardiac_arrhythmia}
-                onChange={v => set('activeCardiac_arrhythmia', v)} warn
-                description="AV-Block Grad III, VT, SVT mit HF >100/min" />
+                onChange={v => set('activeCardiac_arrhythmia', v)} warn description="AV-Block Grad III, VT, SVT mit HF >100/min" />
               <CheckRow label="Schwere Aortenstenose" checked={form.activeCardiac_severeStenosisAo}
-                onChange={v => set('activeCardiac_severeStenosisAo', v)} warn
-                description="KÖF <1,0 cm² und/oder Gradient >40 mmHg" />
+                onChange={v => set('activeCardiac_severeStenosisAo', v)} warn description="KÖF <1,0 cm² und/oder Gradient >40 mmHg" />
               <CheckRow label="Schwere Mitralklappenstenose" checked={form.activeCardiac_severeMitralStenosis}
-                onChange={v => set('activeCardiac_severeMitralStenosis', v)} warn
-                description="Klappenöffnungsfläche <1,5 cm²" />
+                onChange={v => set('activeCardiac_severeMitralStenosis', v)} warn description="Klappenöffnungsfläche <1,5 cm²" />
             </div>
 
             <SecHeader title="Koronarer Stent (Timing)" color="red" />
             <div className="space-y-2">
               <CheckRow label="Drug-eluting Stent (DES) vorhanden" checked={form.stent_hasDES}
-                onChange={v => set('stent_hasDES', v)}
-                description="Mindestabstand 6 Monate vor elektiver OP (ESC 2022)" />
+                onChange={v => set('stent_hasDES', v)} description="Mindestabstand 6 Monate vor elektiver OP (ESC 2022)" />
               <CheckRow label="Bare-metal Stent (BMS) vorhanden" checked={form.stent_hasBMS}
-                onChange={v => set('stent_hasBMS', v)}
-                description="Mindestabstand 4 Wochen vor elektiver OP" />
+                onChange={v => set('stent_hasBMS', v)} description="Mindestabstand 4 Wochen vor elektiver OP" />
             </div>
             {(form.stent_hasDES || form.stent_hasBMS) && (
               <div className="bg-white rounded-2xl p-4 space-y-2 shadow-sm">
@@ -410,10 +547,59 @@ export default function PraeopEval() {
                 )}
               </div>
             )}
+
+            {/* Schrittmacher / ICD */}
+            <CollapsibleSection
+              title="Herzschrittmacher / ICD / CRT"
+              defaultOpen={form.icd_present}
+              badge={form.icd_present
+                ? <span className={clsx('px-2 py-0.5 rounded-full text-xs font-semibold',
+                    form.icd_dependent ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                  )}>{form.icd_type || 'ICD'}{form.icd_dependent ? ' ⚠' : ''}</span>
+                : undefined}
+            >
+              <CheckRow label="Herzschrittmacher, ICD oder CRT vorhanden" checked={form.icd_present}
+                onChange={v => set('icd_present', v)} />
+              {form.icd_present && (
+                <>
+                  <Field label="Typ">
+                    <select value={form.icd_type} onChange={e => set('icd_type', e.target.value as FormState['icd_type'])} className={sel}>
+                      <option value="">– wählen –</option>
+                      <option value="PPM">PPM — Herzschrittmacher</option>
+                      <option value="ICD">ICD — Implantierbarer Kardioverter-Defibrillator</option>
+                      <option value="CRT-P">CRT-P — Kardialer Resynchronisationsschrittmacher</option>
+                      <option value="CRT-D">CRT-D — Resynchronisationsschrittmacher mit ICD</option>
+                    </select>
+                  </Field>
+                  <CheckRow label="Schrittmacherabhängig" checked={form.icd_dependent}
+                    onChange={v => set('icd_dependent', v)} warn
+                    description="Monopolares E-Kauter KONTRAINDIZIERT — nur bipolares Kauter!" />
+                  <Field label="Hersteller / Modell (optional)">
+                    <input type="text" value={form.icd_manufacturer}
+                      onChange={e => set('icd_manufacturer', e.target.value)}
+                      placeholder="z.B. Medtronic EnRhythm …" className={inp} />
+                  </Field>
+                  <Field label="Letzte Aggregatkontrolle (Monat/Jahr)">
+                    <input type="text" value={form.icd_lastCheck}
+                      onChange={e => set('icd_lastCheck', e.target.value)}
+                      placeholder="z.B. 03/2025" className={inp} />
+                  </Field>
+                  <CheckRow label="Umprogrammierung für OP erforderlich" checked={form.icd_reprogramNeeded}
+                    onChange={v => set('icd_reprogramNeeded', v)}
+                    description="Kardiologische Freigabe und ggf. asynchronen Modus programmieren lassen" />
+                  {form.icd_dependent && (
+                    <div className="bg-red-100 border border-red-300 rounded-xl px-3 py-2.5 text-xs text-red-800 font-semibold">
+                      ⚠ Schrittmacherabhängig: Monopolares E-Kauter KONTRAINDIZIERT. Nur bipolares Kauter oder Ultraschallmesser. Magnet bereithalten.
+                    </div>
+                  )}
+                </>
+              )}
+            </CollapsibleSection>
           </>}
 
-          {/* ── STEP 2: RCRI + CFS ──────────────────────────────────────── */}
-          {step === 2 && <>
+          {/* ── STEP 2: RCRI + CFS + ISAR ───────────────────────────────── */}
+          {showStep(2) && <>
+            {expressMode && <SecHeader title="3 · RCRI & Gebrechlichkeit" color="indigo" />}
             <SecHeader title="RCRI nach Lee (Revised Cardiac Risk Index)" color="indigo" />
             <div className="space-y-2">
               <CheckRow label="Hochrisiko-Eingriff (RCRI)" checked={form.rcriHighRiskSurgery}
@@ -493,9 +679,7 @@ export default function PraeopEval() {
                   )}>ISAR {isar}/6</span>
                 : undefined}
             >
-              <p className="text-xs text-slate-500">
-                ISAR = Identification of Seniors At Risk · Score ≥2 = erhöhtes Risiko · Inouye et al. / ESAIC 2021
-              </p>
+              <p className="text-xs text-slate-500">ISAR = Identification of Seniors At Risk · Score ≥2 = erhöhtes Risiko · ESAIC 2021</p>
               <CheckRow label="Benötigte vor der Erkrankung regelmäßig Hilfe bei alltäglichen Aktivitäten (ADL)?"
                 checked={form.delir_isar1} onChange={v => set('delir_isar1', v)} />
               <CheckRow label="War in den letzten 6 Monaten ≥1 Nacht im Krankenhaus?"
@@ -524,10 +708,6 @@ export default function PraeopEval() {
                     onChange={e => set('delir_amts', e.target.value)} placeholder="0–10 (≤6 = eingeschränkt)"
                     className={inp} />
                 </Field>
-                <p className="text-xs text-slate-400 leading-snug">
-                  AMTS-Kurzfragen: Alter, Geburtsdatum, Uhrzeit, aktuelles Jahr, Klinikname,
-                  zwei Personen, Adresse merken, 1./2. WK Jahreszahl, Bundeskanzler (10 Fragen)
-                </p>
               </div>
               <div className={clsx('rounded-xl px-3 py-2.5 text-sm',
                 delirResult.level === 'high' ? 'bg-red-100 text-red-800' :
@@ -541,7 +721,8 @@ export default function PraeopEval() {
           </>}
 
           {/* ── STEP 3: Vorgeschichte + Atemweg ─────────────────────────── */}
-          {step === 3 && <>
+          {showStep(3) && <>
+            {expressMode && <SecHeader title="4 · Vorgeschichte & Atemweg" color="blue" />}
             <SecHeader title="Anästhesiologische Vorgeschichte" color="blue" />
             <div className="bg-white rounded-2xl p-4 space-y-3 shadow-sm">
               <CheckRow label="Vorherige Allgemein- oder Regionalanästhesie" checked={form.prev_hadGA}
@@ -623,9 +804,9 @@ export default function PraeopEval() {
                 <Field label="Reklination HWS">
                   <select value={form.aw_reklination} onChange={e => set('aw_reklination', e.target.value as FormState['aw_reklination'])} className={sel}>
                     <option value="">– wählen –</option>
-                    <option value="normal">Frei — normal</option>
-                    <option value="limited">Eingeschränkt</option>
-                    <option value="very_limited">Stark eingeschränkt</option>
+                    <option value="normal">Frei — normal (&gt;90°)</option>
+                    <option value="limited">Eingeschränkt (~90°)</option>
+                    <option value="very_limited">Stark eingeschränkt (&lt;90°)</option>
                   </select>
                 </Field>
                 <Field label="ULBT (Upper Lip Bite Test)">
@@ -660,25 +841,21 @@ export default function PraeopEval() {
               </div>
             </div>
 
-            {/* Wilson Score */}
             <SecHeader title="Wilson-Score (Schwierige Intubation)" color="indigo" />
             <div className="bg-white rounded-2xl p-4 space-y-3 shadow-sm">
               <p className="text-xs text-slate-500">Wilson et al. 1988 · Score ≥2 → Intubationsschwierigkeit möglich (Sens. ~75 %)</p>
-              {/* Auto-abgeleitete Items */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="bg-slate-50 rounded-xl px-3 py-2 text-xs">
                   <span className="text-slate-400 block">Gewicht</span>
                   <span className="font-semibold text-slate-700">
-                    {!isNaN(weight)
-                      ? `${weight} kg → ${weight > 110 ? '2 Pkt.' : weight >= 90 ? '1 Pkt.' : '0 Pkt.'}`
-                      : '— (aus Schritt 1)'}
+                    {!isNaN(weight) ? `${weight} kg → ${weight > 110 ? '2 Pkt.' : weight >= 90 ? '1 Pkt.' : '0 Pkt.'}` : '— (aus Schritt 1)'}
                   </span>
                 </div>
                 <div className="bg-slate-50 rounded-xl px-3 py-2 text-xs">
                   <span className="text-slate-400 block">HWS-Beweglichkeit</span>
                   <span className="font-semibold text-slate-700">
                     {form.aw_reklination
-                      ? `${form.aw_reklination === 'normal' ? '0 Pkt.' : form.aw_reklination === 'limited' ? '1 Pkt.' : '2 Pkt.'}`
+                      ? (form.aw_reklination === 'normal' ? '0 Pkt.' : form.aw_reklination === 'limited' ? '1 Pkt.' : '2 Pkt.')
                       : '— (Reklination oben wählen)'}
                   </span>
                 </div>
@@ -726,17 +903,17 @@ export default function PraeopEval() {
                 </div>
               )}
               {!wilsonResult.complete && (
-                <p className="text-xs text-slate-400 italic">Score wird angezeigt, sobald ≥4 von 5 Kriterien ausgefüllt sind.</p>
+                <p className="text-xs text-slate-400 italic">Score wird angezeigt sobald ≥4 von 5 Kriterien ausgefüllt sind.</p>
               )}
             </div>
           </>}
 
           {/* ── STEP 4: Noxen + Reflux ──────────────────────────────────── */}
-          {step === 4 && <>
+          {showStep(4) && <>
+            {expressMode && <SecHeader title="5 · Noxen & Reflux" color="rose" />}
             <SecHeader title="Noxen" color="rose" />
             <div className="bg-white rounded-2xl p-4 space-y-3 shadow-sm">
-              <CheckRow label="Aktiver Raucher" checked={form.nox_smoking}
-                onChange={v => set('nox_smoking', v)} />
+              <CheckRow label="Aktiver Raucher" checked={form.nox_smoking} onChange={v => set('nox_smoking', v)} />
               {form.nox_smoking && (
                 <div className="pl-4 border-l-2 border-rose-200 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
@@ -757,8 +934,7 @@ export default function PraeopEval() {
                 </div>
               )}
               {!form.nox_smoking && (
-                <CheckRow label="Ex-Raucher" checked={form.nox_exSmoker}
-                  onChange={v => set('nox_exSmoker', v)} />
+                <CheckRow label="Ex-Raucher" checked={form.nox_exSmoker} onChange={v => set('nox_exSmoker', v)} />
               )}
               {form.nox_exSmoker && !form.nox_smoking && (
                 <div className="pl-4 border-l-2 border-rose-200">
@@ -785,8 +961,7 @@ export default function PraeopEval() {
             </div>
 
             <div className="bg-white rounded-2xl p-4 space-y-3 shadow-sm">
-              <CheckRow label="Drogenkonsum" checked={form.nox_drugs}
-                onChange={v => set('nox_drugs', v)} />
+              <CheckRow label="Drogenkonsum" checked={form.nox_drugs} onChange={v => set('nox_drugs', v)} />
               {form.nox_drugs && (
                 <div className="pl-4 border-l-2 border-rose-200">
                   <Field label="Substanz(en)">
@@ -806,36 +981,32 @@ export default function PraeopEval() {
               {form.reflux_heartburn && (
                 <div className="pl-4 border-l-2 border-amber-200 space-y-2">
                   <CheckRow label="Auch unabhängig von Mahlzeiten / in Ruhe?"
-                    checked={form.reflux_mealIndependent}
-                    onChange={v => set('reflux_mealIndependent', v)} warn
+                    checked={form.reflux_mealIndependent} onChange={v => set('reflux_mealIndependent', v)} warn
                     description="Nahrungsunabhängiger Reflux → erhöhtes Aspirationsrisiko → Gelbe Karte" />
                   <CheckRow label="Nächtliche Hustenanfälle oder Erwachen durch Reflux?"
-                    checked={form.reflux_nocturnalCough}
-                    onChange={v => set('reflux_nocturnalCough', v)} warn
+                    checked={form.reflux_nocturnalCough} onChange={v => set('reflux_nocturnalCough', v)} warn
                     description="Nächtliche Symptome → erhöhtes Aspirationsrisiko → Gelbe Karte" />
                   <CheckRow label="Reflux im Flachliegen (z. B. beim Umlagern)" checked={form.reflux_atRest}
                     onChange={v => set('reflux_atRest', v)} warn
                     description="Lageabhängiger Reflux → erhöhtes Aspirationsrisiko → Gelbe Karte" />
                   <CheckRow label="Regurgitation (spontaner Rückfluss in Mund / Rachen)" checked={form.reflux_regurgitation}
-                    onChange={v => set('reflux_regurgitation', v)} warn
-                    description="Hohes Aspirationsrisiko → Gelbe Karte" />
+                    onChange={v => set('reflux_regurgitation', v)} warn description="Hohes Aspirationsrisiko → Gelbe Karte" />
                 </div>
               )}
               {!form.reflux_heartburn && (
                 <>
                   <CheckRow label="Reflux im Flachliegen" checked={form.reflux_atRest}
-                    onChange={v => set('reflux_atRest', v)} warn
-                    description="Erhöhtes Aspirationsrisiko → Gelbe Nüchternheitskarte" />
+                    onChange={v => set('reflux_atRest', v)} warn description="Erhöhtes Aspirationsrisiko → Gelbe Nüchternheitskarte" />
                   <CheckRow label="Regurgitation (spontaner Rückfluss)" checked={form.reflux_regurgitation}
-                    onChange={v => set('reflux_regurgitation', v)} warn
-                    description="Erhöhtes Aspirationsrisiko → Gelbe Nüchternheitskarte" />
+                    onChange={v => set('reflux_regurgitation', v)} warn description="Erhöhtes Aspirationsrisiko → Gelbe Nüchternheitskarte" />
                 </>
               )}
             </div>
           </>}
 
           {/* ── STEP 5: Blutung + Medikation ────────────────────────────── */}
-          {step === 5 && <>
+          {showStep(5) && <>
+            {expressMode && <SecHeader title="6 · Blutung & Medikation" color="rose" />}
             <SecHeader title="Blutungsanamnese / Gerinnungsdiagnostik" color="rose" />
             <p className="text-xs text-slate-500 px-1">Routinemäßige Gerinnungsdiagnostik ist nicht indiziert (DGAI 2024). Indikation nur bei klinischem Anhalt.</p>
             <div className="space-y-2">
@@ -857,6 +1028,73 @@ export default function PraeopEval() {
                 : 'Blutungsanamnese bland — keine Routine-Gerinnungsdiagnostik (DGAI 2024)'}
             </div>
 
+            {/* Gerinnungszeitfenster */}
+            <CollapsibleSection
+              title="Zeitfenster vor Punktion / Regionalanästhesie"
+              defaultOpen={form.bleeding_anticoagulant || form.hxAnticoagulant || form.hxAntiplatelet}
+              badge={coagTiming
+                ? <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700">{coagTiming.beforePuncture}</span>
+                : undefined}
+            >
+              <p className="text-xs text-slate-500">DGAI/AWMF S1-Leitlinie + ASRA 2018 · Zeitfenster vor neuraxialer Punktion / Anlage rückenmarknaher Katheter</p>
+              <Field label="Antikoagulans / Substanz">
+                <select value={form.anticoag_substance}
+                  onChange={e => set('anticoag_substance', e.target.value as FormState['anticoag_substance'])} className={sel}>
+                  <option value="">– Substanz wählen –</option>
+                  <optgroup label="Heparine">
+                    <option value="ufh_prop">UFH prophylaktisch (≤15.000 IE/d)</option>
+                    <option value="ufh_ther">UFH therapeutisch</option>
+                    <option value="nmh_prop">NMH prophylaktisch (z.B. Enoxaparin 40 mg/d)</option>
+                    <option value="nmh_ther">NMH therapeutisch (z.B. Enoxaparin 1 mg/kg)</option>
+                    <option value="fondaparinux">Fondaparinux (Arixtra)</option>
+                  </optgroup>
+                  <optgroup label="Vitamin-K-Antagonisten">
+                    <option value="phenprocoumon">Phenprocoumon (Marcumar)</option>
+                    <option value="warfarin">Warfarin</option>
+                  </optgroup>
+                  <optgroup label="DOAK / NOAK">
+                    <option value="dabigatran">Dabigatran (Pradaxa)</option>
+                    <option value="rivaroxaban">Rivaroxaban (Xarelto)</option>
+                    <option value="apixaban">Apixaban (Eliquis)</option>
+                    <option value="edoxaban">Edoxaban (Lixiana)</option>
+                  </optgroup>
+                  <optgroup label="Thrombozytenaggregationshemmer">
+                    <option value="ass_only">ASS allein (≤100 mg/d)</option>
+                    <option value="clopidogrel">Clopidogrel (Plavix)</option>
+                    <option value="ticagrelor">Ticagrelor (Brilique)</option>
+                    <option value="prasugrel">Prasugrel (Efient)</option>
+                  </optgroup>
+                </select>
+              </Field>
+              {coagTiming && (
+                <div className="rounded-xl border border-indigo-200 overflow-hidden">
+                  <div className="bg-indigo-700 px-3 py-2">
+                    <p className="text-white text-xs font-bold">{coagTiming.name}</p>
+                  </div>
+                  <div className="bg-indigo-50 divide-y divide-indigo-100">
+                    <div className="px-3 py-2.5 flex items-center justify-between">
+                      <span className="text-xs text-indigo-700 font-medium">Vor Punktion pausieren</span>
+                      <span className="text-sm font-bold text-indigo-900">{coagTiming.beforePuncture}</span>
+                    </div>
+                    <div className="px-3 py-2.5 flex items-center justify-between">
+                      <span className="text-xs text-indigo-700 font-medium">Erste Dosis nach Punktion</span>
+                      <span className="text-sm font-bold text-indigo-900">{coagTiming.afterPuncture}</span>
+                    </div>
+                    {coagTiming.notes && (
+                      <div className="px-3 py-2 bg-amber-50">
+                        <p className="text-xs text-amber-800 flex items-start gap-1.5">
+                          <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />{coagTiming.notes}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {!form.anticoag_substance && (
+                <p className="text-xs text-slate-400 italic">Substanz wählen für spezifisches Zeitfenster.</p>
+              )}
+            </CollapsibleSection>
+
             <SecHeader title="Aktuelle Medikation & Diagnosen" color="slate" />
             <div className="space-y-2">
               <CheckRow label="ACE-Hemmer oder Sartan" checked={form.hxACEorARB} onChange={v => set('hxACEorARB', v)}
@@ -866,8 +1104,7 @@ export default function PraeopEval() {
               <CheckRow label="Diuretikum" checked={form.hxDiuretic} onChange={v => set('hxDiuretic', v)}
                 description="Elektrolyte präoperativ prüfen" />
               <CheckRow label="SGLT-2-Inhibitor (Jardiance, Forxiga u.a.)" checked={form.hxSGLT2}
-                onChange={v => set('hxSGLT2', v)} warn
-                description="3–4 Tage präoperativ absetzen — euDKA-Risiko!" />
+                onChange={v => set('hxSGLT2', v)} warn description="3–4 Tage präoperativ absetzen — euDKA-Risiko!" />
               <CheckRow label="GLP-1-Agonist (Ozempic, Victoza u.a.)" checked={form.hxGLP1}
                 onChange={v => set('hxGLP1', v)} warn
                 description="Wöchentlich: 1 Woche pausieren; täglich: OP-Tag pausieren — Aspirationsrisiko!" />
@@ -885,11 +1122,11 @@ export default function PraeopEval() {
               <CheckRow label="Reduzierte LV-Funktion" checked={form.hxPoorLVFunction} onChange={v => set('hxPoorLVFunction', v)} />
               <CheckRow label="Lebererkrankung" checked={form.hxLiverDisease} onChange={v => set('hxLiverDisease', v)} />
             </div>
-
           </>}
 
-          {/* ── STEP 6: Pulmonales + STOP-BANG + PEN-FAST ───────────────── */}
-          {step === 6 && <>
+          {/* ── STEP 6: Pulmonales + STOP-BANG + PEN-FAST + Allergien ───── */}
+          {showStep(6) && <>
+            {expressMode && <SecHeader title="7 · Pulmonales Risiko & Allergie" color="teal" />}
             <SecHeader title="ARISCAT-Score (Pulmonales Komplikationsrisiko)" color="teal" />
             <div className="bg-white rounded-2xl p-4 space-y-3 shadow-sm">
               <p className="text-xs text-slate-500">Alter, Hb, OP-Ort, OP-Dauer und Dringlichkeit werden aus den Eingaben übernommen.</p>
@@ -958,6 +1195,7 @@ export default function PraeopEval() {
               </div>
             </div>
 
+            {/* PEN-FAST */}
             <SecHeader title="PEN-FAST (Penicillin-Allergie-Risiko)" color="amber" />
             <div className="space-y-2">
               <CheckRow label="Penicillin-Allergie oder -Unverträglichkeit in der Anamnese"
@@ -976,8 +1214,7 @@ export default function PraeopEval() {
                   onChange={v => set('pf_anaphylaxis', v)} warn
                   description="Urtikaria + Kreislaufreaktionen oder Schleimhautschwellung" />
                 <CheckRow label="E – Schwere Hautreaktion / SCAR (2 Pkt.)" checked={form.pf_scar}
-                  onChange={v => set('pf_scar', v)} warn
-                  description="Stevens-Johnson, TEN, DRESS" />
+                  onChange={v => set('pf_scar', v)} warn description="Stevens-Johnson, TEN, DRESS" />
                 <CheckRow label="T – Medizinische Behandlung erforderlich (1 Pkt.)" checked={form.pf_treatment}
                   onChange={v => set('pf_treatment', v)} />
                 {penFast !== null && penFastR && (
@@ -997,15 +1234,61 @@ export default function PraeopEval() {
                          penFast === 3 ? 'Allergologische Testung empfohlen' :
                          'Penicillin-Gruppe meiden → Allergologie'}
                       </p>
+                      <p className="text-xs text-amber-700 mt-0.5">Kreuzreaktivität Penicillin ↔ Cephalosporine: ~2 % (seitliche Kettenhomologie beachten)</p>
                     </div>
                   </div>
                 )}
               </div>
             )}
+
+            {/* Latex & Allergien allgemein */}
+            <SecHeader title="Latex & weitere Allergien" color="amber" />
+            <div className="space-y-2">
+              <CheckRow label="Latex-Allergie" checked={form.allergy_latex}
+                onChange={v => set('allergy_latex', v)} warn
+                description="Latex-freie OP-Umgebung erforderlich (Handschuhe, Katheter, Schläuche)" />
+              {form.allergy_latex && (
+                <div className="pl-4 border-l-2 border-amber-200 space-y-2">
+                  <Field label="Typ der Latex-Reaktion">
+                    <select value={form.allergy_latexType} onChange={e => set('allergy_latexType', e.target.value as FormState['allergy_latexType'])} className={sel}>
+                      <option value="">– wählen –</option>
+                      <option value="contact">Kontaktallergie / Typ IV (verzögert)</option>
+                      <option value="systemic">Systemische Reaktion / Typ I — IgE-vermittelt (Anaphylaxiegefahr!)</option>
+                    </select>
+                  </Field>
+                  <CheckRow
+                    label="Latex-Frucht-Syndrom (Avocado, Banane, Kiwi, Kastanie, Maracuja …)"
+                    checked={form.allergy_latexFruit}
+                    onChange={v => set('allergy_latexFruit', v)}
+                    description="Kreuzreaktive Nahrungsmittelallergien — klinisch relevant bei Typ-I-Latex-Allergie"
+                  />
+                  {form.allergy_latexType === 'systemic' && (
+                    <div className="bg-red-100 border border-red-300 rounded-xl px-3 py-2 text-xs text-red-800 font-semibold flex items-start gap-2">
+                      <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                      Anaphylaxiegefahr! Notfallset bereithalten. Latex-freie OP als erstes am OP-Tag einplanen (geringere Latexkontamination der Luft).
+                    </div>
+                  )}
+                </div>
+              )}
+              <CheckRow label="Kontrastmittel-Allergie / Unverträglichkeit" checked={form.allergy_contrast}
+                onChange={v => set('allergy_contrast', v)}
+                description="Relevant bei intraoperativer Angiographie oder Radiologie" />
+              <CheckRow label="NSAID / ASS-Unverträglichkeit" checked={form.allergy_nsaid}
+                onChange={v => set('allergy_nsaid', v)}
+                description="Intoleranz oder Allergie — perioperative Schmerztherapie anpassen" />
+            </div>
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <Field label="Weitere Allergien / Unverträglichkeiten (Freitext)">
+                <input type="text" value={form.allergy_other}
+                  onChange={e => set('allergy_other', e.target.value)}
+                  placeholder="z.B. Jodallergie, Metabisulfit, Nahrungsmittel …" className={inp} />
+              </Field>
+            </div>
           </>}
 
           {/* ── STEP 7: Nüchternheitskarte ──────────────────────────────── */}
-          {step === 7 && <>
+          {showStep(7) && <>
+            {expressMode && <SecHeader title="8 · Nüchternheitskarte" color="teal" />}
             <SecHeader title="Nüchternheitskarte" color="teal" />
             <p className="text-xs text-slate-500 px-1">
               Die Klassifikation erfolgt automatisch. Hier können weitere Kriterien ergänzt werden.
@@ -1057,6 +1340,16 @@ export default function PraeopEval() {
               </p>
             </div>
           </>}
+
+          {/* Express-Modus: Zum Ergebnis */}
+          {expressMode && !isResult && (
+            <button
+              onClick={() => { setStep(8); setExpressMode(false) }}
+              className="w-full py-4 rounded-2xl bg-blue-600 text-white font-bold text-base hover:bg-blue-700 transition-colors shadow-md"
+            >
+              Zum Ergebnis →
+            </button>
+          )}
 
           {/* ── STEP 8: Result ───────────────────────────────────────────── */}
           {step === 8 && <>
@@ -1202,16 +1495,14 @@ export default function PraeopEval() {
       {/* Floating buttons */}
       <div className="fixed bottom-20 right-3 z-50 flex flex-col items-end gap-2">
         <button onClick={() => setDiagOpen(true)}
-          className="bg-indigo-600 text-white rounded-full px-4 py-2.5 flex items-center gap-2 shadow-lg hover:bg-indigo-700 transition-colors text-sm font-semibold"
-          title="Diagnostik-Check">
+          className="bg-indigo-600 text-white rounded-full px-4 py-2.5 flex items-center gap-2 shadow-lg hover:bg-indigo-700 transition-colors text-sm font-semibold">
           <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
           </svg>
           <span>Diagnostik</span>
         </button>
         <button onClick={() => setMedOpen(true)}
-          className="bg-teal-600 text-white rounded-full px-4 py-2.5 flex items-center gap-2 shadow-lg hover:bg-teal-700 transition-colors text-sm font-semibold"
-          title="Medikamenten-Suche">
+          className="bg-teal-600 text-white rounded-full px-4 py-2.5 flex items-center gap-2 shadow-lg hover:bg-teal-700 transition-colors text-sm font-semibold">
           <Pill className="w-4 h-4 flex-shrink-0" />
           <span>Medikamente</span>
         </button>
@@ -1256,30 +1547,32 @@ export default function PraeopEval() {
         </div>
       )}
 
-      {/* Bottom navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-3 flex gap-3 z-50">
-        {step > 0 && (
-          <button onClick={() => setStep(s => s - 1)}
-            className="flex items-center gap-1.5 px-4 py-3 rounded-xl border border-slate-300 text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">
-            <ChevronLeft className="w-4 h-4" />
-            Zurück
-          </button>
-        )}
-        {step < 8 && (
-          <button onClick={() => setStep(s => s + 1)}
-            className="flex-1 flex items-center justify-center gap-1.5 px-5 py-3 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors">
-            {step === 7 ? 'Ergebnis anzeigen' : 'Weiter'}
-            {step < 7 && <ChevronRight className="w-4 h-4" />}
-          </button>
-        )}
-        {step === 8 && (
-          <button onClick={reset}
-            className="flex-1 flex items-center justify-center gap-1.5 px-5 py-3 rounded-xl bg-slate-700 text-white text-sm font-semibold hover:bg-slate-800 transition-colors">
-            <RotateCcw className="w-4 h-4" />
-            Neue Evaluation
-          </button>
-        )}
-      </div>
+      {/* Bottom navigation (hidden in express mode) */}
+      {!expressMode && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-3 flex gap-3 z-50">
+          {step > 0 && (
+            <button onClick={() => setStep(s => s - 1)}
+              className="flex items-center gap-1.5 px-4 py-3 rounded-xl border border-slate-300 text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">
+              <ChevronLeft className="w-4 h-4" />
+              Zurück
+            </button>
+          )}
+          {step < 8 && (
+            <button onClick={() => setStep(s => s + 1)}
+              className="flex-1 flex items-center justify-center gap-1.5 px-5 py-3 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors">
+              {step === 7 ? 'Ergebnis anzeigen' : 'Weiter'}
+              {step < 7 && <ChevronRight className="w-4 h-4" />}
+            </button>
+          )}
+          {step === 8 && (
+            <button onClick={reset}
+              className="flex-1 flex items-center justify-center gap-1.5 px-5 py-3 rounded-xl bg-slate-700 text-white text-sm font-semibold hover:bg-slate-800 transition-colors">
+              <RotateCcw className="w-4 h-4" />
+              Neue Evaluation
+            </button>
+          )}
+        </div>
+      )}
 
     </div>
   )

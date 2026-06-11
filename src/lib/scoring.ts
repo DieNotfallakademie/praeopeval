@@ -286,6 +286,57 @@ export function delirRisk(f: FormState, isar: number): {
   return { level, label: labels[level], explanation: explanations[level], recommendations: recs }
 }
 
+// ── Gerinnungszeitfenster vor Punktion (DGAI/AWMF + ASRA 2018) ────────────────
+export interface CoagTiming {
+  name: string
+  beforePuncture: string
+  afterPuncture: string
+  notes?: string
+}
+
+export function getCoagulationTiming(substance: string, egfr?: number | null): CoagTiming | null {
+  const dabigatranBefore = egfr !== null && egfr !== undefined
+    ? (egfr < 30 ? '≥96 h (GFR <30 — cave: Kontraindikation möglich)' : egfr < 50 ? '≥72–96 h (GFR 30–50)' : egfr < 80 ? '≥72 h (GFR 50–80)' : '≥48 h')
+    : '≥48 h (GFR unbekannt → ggf. länger)'
+  const map: Record<string, CoagTiming> = {
+    ufh_prop:    { name: 'UFH prophylaktisch (≤15.000 IE/d)', beforePuncture: '≥4 h', afterPuncture: '1 h' },
+    ufh_ther:    { name: 'UFH therapeutisch', beforePuncture: '≥4–6 h', afterPuncture: '1 h', notes: 'aPTT normal vor Punktion' },
+    nmh_prop:    { name: 'NMH prophylaktisch (z.B. Enoxaparin 40 mg/d)', beforePuncture: '≥12 h', afterPuncture: '4 h' },
+    nmh_ther:    { name: 'NMH therapeutisch (z.B. Enoxaparin 1 mg/kg 2×/d)', beforePuncture: '≥24 h', afterPuncture: '4 h' },
+    fondaparinux:{ name: 'Fondaparinux (Arixtra) prophylaktisch', beforePuncture: '≥36–42 h', afterPuncture: '6–12 h' },
+    phenprocoumon:{ name: 'Phenprocoumon (Marcumar)', beforePuncture: 'INR ≤1,4', afterPuncture: 'sofort', notes: 'INR-Messung unmittelbar vor Punktion' },
+    warfarin:    { name: 'Warfarin', beforePuncture: 'INR ≤1,4', afterPuncture: 'sofort', notes: 'INR-Messung unmittelbar vor Punktion' },
+    dabigatran:  { name: 'Dabigatran (Pradaxa)', beforePuncture: dabigatranBefore, afterPuncture: '≥6 h', notes: 'Nierenfunktion berücksichtigen (renale Elimination 80 %)' },
+    rivaroxaban: { name: 'Rivaroxaban (Xarelto)', beforePuncture: '≥22–26 h (10 mg/d) / ≥30 h (20 mg/d)', afterPuncture: '≥6 h' },
+    apixaban:    { name: 'Apixaban (Eliquis)', beforePuncture: '≥26–30 h (2×2,5 mg) / ≥30 h (2×5 mg)', afterPuncture: '≥6 h' },
+    edoxaban:    { name: 'Edoxaban (Lixiana)', beforePuncture: '≥20–24 h (30 mg) / ≥24 h (60 mg)', afterPuncture: '≥6 h' },
+    clopidogrel: { name: 'Clopidogrel (Plavix)', beforePuncture: '7 Tage', afterPuncture: '6 h (mit nächster Dosis)' },
+    ticagrelor:  { name: 'Ticagrelor (Brilique)', beforePuncture: '5 Tage', afterPuncture: '6 h' },
+    prasugrel:   { name: 'Prasugrel (Efient)', beforePuncture: '7–10 Tage', afterPuncture: '6 h' },
+    ass_only:    { name: 'ASS allein (≤100 mg/d)', beforePuncture: 'Keine Pause', afterPuncture: 'sofort', notes: 'Bei Kombination mit DOAK/NMH: individuelle Bewertung' },
+  }
+  return map[substance] ?? null
+}
+
+// ── Pädiatrische Prämedikation (DGAI/AWMF) ───────────────────────────────────
+export function calcPediatricPremed(weightKg: number, ageYears: number): {
+  midazolam_oral_mg: number
+  midazolam_oral_ml: number
+  midazolam_nasal_mg: number
+  clonidine_oral_ug: number
+  notes: string[]
+} {
+  const maxMidaz = ageYears <= 6 ? 10 : 15
+  const midazolam_oral_mg = Math.round(Math.min(0.4 * weightKg, maxMidaz) * 10) / 10
+  const midazolam_oral_ml = Math.round((midazolam_oral_mg / 5) * 10) / 10
+  const midazolam_nasal_mg = Math.round(Math.min(0.2 * weightKg, 5) * 10) / 10
+  const clonidine_oral_ug = Math.min(Math.round(4 * weightKg), 150)
+  const notes: string[] = ['Midazolam 20–30 min vor Einleitung geben', 'Clonidine-Anschlag 45–60 min (länger!)']
+  if (ageYears < 1) notes.push('⚠ Säugling <1 J.: Prämedikation kritisch abwägen — Apnoe-Risiko!')
+  if (ageYears < 0.5) notes.push('⚠ <6 Monate: Midazolam möglichst vermeiden')
+  return { midazolam_oral_mg, midazolam_oral_ml, midazolam_nasal_mg, clonidine_oral_ug, notes }
+}
+
 // ── HbA1c ─────────────────────────────────────────────────────────────────────
 export function evaluateHbA1c(v: number): { postpone: boolean; label: string } {
   if (v > 10) return { postpone: true, label: `HbA1c ${v} % → stark erhöht: OP-Verschiebung und diabetologische Optimierung dringend empfohlen` }
@@ -611,13 +662,7 @@ export function generateProtocolText(f: FormState): string {
   // Anamnese — Pflichtfelder, immer dokumentiert (auch wenn negativ)
   L.push('ANAMNESE')
 
-  // Allergien — immer
-  if (f.pf_hasPenicillinAllergy && pf !== null) {
-    const pfR = penFastRisk(pf)
-    L.push(`Allergien: Penicillin-Allergie (PEN-FAST ${pf}/5 — ${pfR.label}, IgE-vermittelt ${pfR.pct})`)
-  } else {
-    L.push('Allergien: Keine bekannten Medikamentenallergien')
-  }
+  // (Allergien werden weiter oben nach Familiäranamnese ausgegeben)
 
   // Vornarkosen — immer
   if (f.prev_hadGA) {
@@ -641,6 +686,20 @@ export function generateProtocolText(f: FormState): string {
   ].filter(Boolean).join(', ')
   L.push(`Familiäre Anästhesieanamnese: ${famDetails || 'Keine Besonderheiten'}`)
 
+  // Allergien — immer
+  const allergyParts: string[] = []
+  if (f.pf_hasPenicillinAllergy && pf !== null) {
+    const pfR = penFastRisk(pf)
+    allergyParts.push(`Penicillin (PEN-FAST ${pf}/5 — IgE-vermittelt ${pfR.pct})`)
+  }
+  if (f.allergy_latex) allergyParts.push(`Latex (${f.allergy_latexType === 'systemic' ? 'systemisch' : 'Kontakt'})`)
+  if (f.allergy_contrast) allergyParts.push('Kontrastmittel')
+  if (f.allergy_nsaid) allergyParts.push('NSAID/ASS')
+  if (f.allergy_other) allergyParts.push(f.allergy_other)
+  L.push(`Allergien/Unverträglichkeiten: ${allergyParts.length ? allergyParts.join(', ') : 'Keine bekannten'}`)
+  if (f.allergy_latex && f.allergy_latexFruit) L.push('  → Latex-Frucht-Syndrom: Avocado, Banane, Kiwi, Maracuja — kreuzreaktive Nahrungsmittel')
+  if (f.allergy_latex) L.push('  → Latex-freie OP-Umgebung erforderlich!')
+
   // Sodbrennen/Reflux — immer
   const refluxDetails = [
     f.reflux_heartburn && 'Sodbrennen/GERD',
@@ -655,6 +714,20 @@ export function generateProtocolText(f: FormState): string {
   L.push(`Gerinnungsanamnese: ${coag.needed ? coag.reason : 'Unauffällig (keine Routinediagnostik erforderlich, DGAI 2024)'}`)
 
   L.push('')
+
+  // Schrittmacher / ICD / CRT — wenn vorhanden
+  if (f.icd_present) {
+    const icdParts = [
+      f.icd_type || 'Typ unbekannt',
+      f.icd_dependent && '⚠ SCHRITTMACHERABHÄNGIG',
+      f.icd_manufacturer && `Hersteller: ${f.icd_manufacturer}`,
+      f.icd_lastCheck && `Letzte Kontrolle: ${f.icd_lastCheck}`,
+      f.icd_reprogramNeeded && 'Umprogrammierung für OP erforderlich',
+    ].filter(Boolean).join(' | ')
+    L.push(`Herzschrittmacher/ICD: ${icdParts}`)
+    if (f.icd_dependent) L.push('  → Monopolares Kauter KONTRAINDIZIERT — nur bipolares E-Kauter!')
+    L.push('')
+  }
 
   // Atemweg — IMMER mit allen Pflichtparametern
   L.push('ATEMWEG')
@@ -751,6 +824,10 @@ export function buildAssessmentItems(f: FormState, rcri: number, ariscat: number
   const hb = parseFloat(f.hemoglobin)
 
   if (hasActiveCardiacCondition(f)) items.push({ category: 'Kardial', text: 'AKTIVE KARDIALE BEDINGUNG: Kardiologie SOFORT konsultieren — elektive OP pausieren', urgency: 'critical' })
+  if (f.icd_present && f.icd_dependent) items.push({ category: 'Kardial', text: 'Schrittmacherabhängig: Monopolares E-Kauter KONTRAINDIZIERT — nur bipolares Kauter! Magnet + kardiologische OP-Freigabe', urgency: 'critical' })
+  else if (f.icd_present && f.icd_reprogramNeeded) items.push({ category: 'Kardial', text: `ICD/PPM (${f.icd_type || 'Typ?'}): Umprogrammierung vor OP erforderlich — Kardiologie kontaktieren`, urgency: 'high' })
+  else if (f.icd_present) items.push({ category: 'Kardial', text: `Herzschrittmacher/ICD (${f.icd_type || 'Typ?'}): E-Kauter-Interferenz beachten, Magnet bereithalten`, urgency: 'medium' })
+  if (f.allergy_latex) items.push({ category: 'Allergie', text: `Latex-Allergie (${f.allergy_latexType === 'systemic' ? 'systemisch!' : 'Kontakt'}): Latex-freie OP-Umgebung, latexfreie Handschuhe und Katheter obligat`, urgency: f.allergy_latexType === 'systemic' ? 'critical' : 'high' })
   const stent = evaluateStentTiming(f)
   if (stent.status === 'contraindicated') items.push({ category: 'Kardial', text: stent.message, urgency: 'critical' })
   if (f.prev_familyMH) items.push({ category: 'Anästhesie', text: 'MH-Familienanamnese: TRIGGERFREIE Anästhesie — Dantrolene bereitstellen', urgency: 'critical' })

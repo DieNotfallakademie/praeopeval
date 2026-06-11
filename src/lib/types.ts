@@ -45,9 +45,9 @@ export interface FormState {
   aw_notes: string
 
   // ── Wilson-Score (Atemweg) ──────────────────────────────────────────────────
-  aw_wilson_jaw: '0' | '1' | '2' | ''       // Kieferbeweglichkeit + Subluxation
-  aw_wilson_mandible: '0' | '1' | '2' | ''  // Retrognathie
-  aw_wilson_teeth: '0' | '1' | '2' | ''     // Vorstehende Schneidezähne
+  aw_wilson_jaw: '0' | '1' | '2' | ''
+  aw_wilson_mandible: '0' | '1' | '2' | ''
+  aw_wilson_teeth: '0' | '1' | '2' | ''
 
   // ── Noxen ───────────────────────────────────────────────────────────────────
   nox_smoking: boolean
@@ -79,6 +79,14 @@ export interface FormState {
   stent_hasDES: boolean
   stent_hasBMS: boolean
   stent_monthsSinceImplant: string
+
+  // ── Herzschrittmacher / ICD / CRT ──────────────────────────────────────────
+  icd_present: boolean
+  icd_type: 'PPM' | 'ICD' | 'CRT-P' | 'CRT-D' | ''
+  icd_dependent: boolean
+  icd_manufacturer: string
+  icd_lastCheck: string
+  icd_reprogramNeeded: boolean
 
   // ── RCRI ────────────────────────────────────────────────────────────────────
   rcriHighRiskSurgery: boolean
@@ -113,18 +121,25 @@ export interface FormState {
   sb_pressure: boolean
   sb_neckOver40: boolean
 
-  // ── PEN-FAST ────────────────────────────────────────────────────────────────
+  // ── PEN-FAST & Allergien ────────────────────────────────────────────────────
   pf_hasPenicillinAllergy: boolean
   pf_time: '<5years' | '>=5years' | ''
   pf_anaphylaxis: boolean
   pf_scar: boolean
   pf_treatment: boolean
+  allergy_latex: boolean
+  allergy_latexType: 'contact' | 'systemic' | ''
+  allergy_latexFruit: boolean   // Latex-Frucht-Syndrom (Avocado, Banane, Kiwi …)
+  allergy_contrast: boolean
+  allergy_nsaid: boolean
+  allergy_other: string
 
   // ── Blutungsanamnese / Gerinnung ────────────────────────────────────────────
   bleeding_spontaneous: boolean
   bleeding_prolonged: boolean
   bleeding_familyHistory: boolean
   bleeding_anticoagulant: boolean
+  anticoag_substance: '' | 'ufh_prop' | 'ufh_ther' | 'nmh_prop' | 'nmh_ther' | 'fondaparinux' | 'phenprocoumon' | 'warfarin' | 'dabigatran' | 'rivaroxaban' | 'apixaban' | 'edoxaban' | 'clopidogrel' | 'ticagrelor' | 'prasugrel' | 'ass_only'
 
   // ── Medikation & Anamnese ───────────────────────────────────────────────────
   hxACEorARB: boolean
@@ -173,6 +188,7 @@ export const defaultFormState: FormState = {
   activeCardiac_decompHF: false, activeCardiac_arrhythmia: false,
   activeCardiac_severeStenosisAo: false, activeCardiac_severeMitralStenosis: false,
   stent_hasDES: false, stent_hasBMS: false, stent_monthsSinceImplant: '',
+  icd_present: false, icd_type: '', icd_dependent: false, icd_manufacturer: '', icd_lastCheck: '', icd_reprogramNeeded: false,
   rcriHighRiskSurgery: false, rcriIschemicHD: false, rcriHeartFailure: false,
   rcriCerebrovascular: false, rcriDiabetesInsulin: false, rcriCreatinineOver2: false,
   cfs: 0,
@@ -181,7 +197,10 @@ export const defaultFormState: FormState = {
   ariscat_spo2: '', ariscat_respInfection: false,
   sb_snoring: false, sb_tired: false, sb_observed: false, sb_pressure: false, sb_neckOver40: false,
   pf_hasPenicillinAllergy: false, pf_time: '', pf_anaphylaxis: false, pf_scar: false, pf_treatment: false,
+  allergy_latex: false, allergy_latexType: '', allergy_latexFruit: false,
+  allergy_contrast: false, allergy_nsaid: false, allergy_other: '',
   bleeding_spontaneous: false, bleeding_prolonged: false, bleeding_familyHistory: false, bleeding_anticoagulant: false,
+  anticoag_substance: '',
   hxACEorARB: false, hxDiuretic: false, hxSGLT2: false, hxGLP1: false,
   hxBetablocker: false, hxStatin: false, hxAnticoagulant: false, hxAntiplatelet: false,
   hxHypertension: false, hxDiabetes: false, hxCOPD: false, hxOSA: false,
