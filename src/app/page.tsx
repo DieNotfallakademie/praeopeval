@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Copy, Check, RotateCcw, ChevronLeft, ChevronRight, AlertCircle, AlertTriangle, Pill, X, MessageSquare } from 'lucide-react'
+import { Copy, Check, RotateCcw, ChevronLeft, ChevronRight, ChevronDown, AlertCircle, AlertTriangle, Info, Pill, X, MessageSquare } from 'lucide-react'
 import clsx from 'clsx'
 import { FormState, defaultFormState } from '@/lib/types'
 import {
@@ -12,6 +12,7 @@ import {
   hasActiveCardiacCondition, evaluateStentTiming, stressTestIndication,
   needsCoagulationWorkup, calcPackYears,
   difficultAirwayScore, difficultAirwayLabel,
+  calcWilsonScore, wilsonRisk,
   determineFastingCard, FASTING_CARD_INFO,
   generateProtocolText, buildAssessmentItems,
   calcISAR, delirRisk,
@@ -65,13 +66,37 @@ function RiskBadge({ level, label }: { level: 'low' | 'intermediate' | 'high'; l
 
 function SecHeader({ title, color = 'blue' }: { title: string; color?: string }) {
   const map: Record<string, string> = {
-    blue: 'bg-blue-600', red: 'bg-red-600', teal: 'bg-teal-600',
-    violet: 'bg-violet-600', amber: 'bg-amber-600', rose: 'bg-rose-600',
-    indigo: 'bg-indigo-600', slate: 'bg-slate-600',
+    blue: 'from-blue-600 to-blue-700', red: 'from-red-600 to-red-700', teal: 'from-teal-600 to-teal-700',
+    violet: 'from-violet-600 to-violet-700', amber: 'from-amber-500 to-amber-600', rose: 'from-rose-600 to-rose-700',
+    indigo: 'from-indigo-600 to-indigo-700', slate: 'from-slate-600 to-slate-700',
   }
   return (
-    <div className={clsx('rounded-xl px-4 py-2.5', map[color] ?? map.blue)}>
+    <div className={clsx('rounded-xl px-4 py-2.5 bg-gradient-to-r shadow-sm', map[color] ?? map.blue)}>
       <h2 className="text-sm font-bold text-white tracking-wide">{title}</h2>
+    </div>
+  )
+}
+
+function CollapsibleSection({
+  title, defaultOpen = false, badge, children,
+}: {
+  title: string; defaultOpen?: boolean; badge?: React.ReactNode; children: React.ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className="rounded-2xl border border-slate-200 overflow-hidden bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+      >
+        <span className="text-sm font-semibold text-slate-700">{title}</span>
+        <div className="flex items-center gap-2">
+          {badge}
+          <ChevronDown className={clsx('w-4 h-4 text-slate-400 transition-transform duration-200', open && 'rotate-180')} />
+        </div>
+      </button>
+      {open && <div className="p-4 space-y-2 border-t border-slate-100">{children}</div>}
     </div>
   )
 }
@@ -133,6 +158,8 @@ export default function PraeopEval() {
   const delirResult = useMemo(() => delirRisk(form, isar), [form, isar])
   const awScore = useMemo(() => difficultAirwayScore(form), [form])
   const awLabel = useMemo(() => difficultAirwayLabel(awScore), [awScore])
+  const wilsonResult = useMemo(() => calcWilsonScore(form, !isNaN(weight) ? weight : null), [form, weight])
+  const wilsonR = useMemo(() => wilsonRisk(wilsonResult.score), [wilsonResult.score])
   const fastingCard = useMemo(() => determineFastingCard(form), [form])
   const protocolText = useMemo(() => generateProtocolText(form), [form])
   const assessmentItems = useMemo(() => buildAssessmentItems(form, rcri, ariscat, sbScore), [form, rcri, ariscat, sbScore])
@@ -457,12 +484,18 @@ export default function PraeopEval() {
               </label>
             </div>
 
-            <SecHeader title="Postoperatives Delirium-Risiko (ISAR-Screening)" color="amber" />
-            <p className="text-xs text-slate-500 px-1">
-              ISAR = Identification of Seniors At Risk. Empfohlen für Patienten ≥65 Jahre oder mit kognitiven Auffälligkeiten.
-              Score ≥2 von 6 Punkten = erhöhtes Risiko. (Inouye et al. / ESAIC 2021)
-            </p>
-            <div className="space-y-2">
+            <CollapsibleSection
+              title="Postoperatives Delirium-Risiko (ISAR-Screening)"
+              defaultOpen={(!isNaN(age) && age >= 65) || form.cfs >= 5 || isar > 0 || form.delir_knownDementia}
+              badge={isar > 0
+                ? <span className={clsx('px-2 py-0.5 rounded-full text-xs font-semibold',
+                    isar >= 2 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'
+                  )}>ISAR {isar}/6</span>
+                : undefined}
+            >
+              <p className="text-xs text-slate-500">
+                ISAR = Identification of Seniors At Risk · Score ≥2 = erhöhtes Risiko · Inouye et al. / ESAIC 2021
+              </p>
               <CheckRow label="Benötigte vor der Erkrankung regelmäßig Hilfe bei alltäglichen Aktivitäten (ADL)?"
                 checked={form.delir_isar1} onChange={v => set('delir_isar1', v)} />
               <CheckRow label="War in den letzten 6 Monaten ≥1 Nacht im Krankenhaus?"
@@ -475,39 +508,36 @@ export default function PraeopEval() {
                 checked={form.delir_isar5} onChange={v => set('delir_isar5', v)} />
               <CheckRow label="Nimmt täglich ≥5 Medikamente ein?"
                 checked={form.delir_isar6} onChange={v => set('delir_isar6', v)} />
-            </div>
-
-            <div className="bg-white rounded-2xl p-4 space-y-3 shadow-sm">
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">ISAR-Score</span>
-                <span className={clsx('px-2.5 py-0.5 rounded-full text-xs font-semibold',
-                  isar >= 2 ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'
-                )}>{isar}/6 — {isar >= 2 ? 'erhöhtes Risiko' : 'niedriges Risiko'}</span>
+              <div className="bg-slate-50 rounded-xl p-3 space-y-2 mt-1">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">ISAR-Score</span>
+                  <span className={clsx('px-2.5 py-0.5 rounded-full text-xs font-semibold',
+                    isar >= 2 ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'
+                  )}>{isar}/6 — {isar >= 2 ? 'erhöhtes Risiko' : 'niedriges Risiko'}</span>
+                </div>
+                <CheckRow label="Bekannte Demenz" checked={form.delir_knownDementia}
+                  onChange={v => set('delir_knownDementia', v)} warn />
+                <CheckRow label="Vorbekanntes Delir (frühere Episode)" checked={form.delir_prevDelirium}
+                  onChange={v => set('delir_prevDelirium', v)} warn />
+                <Field label="AMTS (Abbreviated Mental Test Score) 0–10 — leer lassen wenn nicht getestet">
+                  <input type="number" inputMode="numeric" min={0} max={10} value={form.delir_amts}
+                    onChange={e => set('delir_amts', e.target.value)} placeholder="0–10 (≤6 = eingeschränkt)"
+                    className={inp} />
+                </Field>
+                <p className="text-xs text-slate-400 leading-snug">
+                  AMTS-Kurzfragen: Alter, Geburtsdatum, Uhrzeit, aktuelles Jahr, Klinikname,
+                  zwei Personen, Adresse merken, 1./2. WK Jahreszahl, Bundeskanzler (10 Fragen)
+                </p>
               </div>
-              <CheckRow label="Bekannte Demenz" checked={form.delir_knownDementia}
-                onChange={v => set('delir_knownDementia', v)} warn />
-              <CheckRow label="Vorbekanntes Delir (frühere Episode)" checked={form.delir_prevDelirium}
-                onChange={v => set('delir_prevDelirium', v)} warn />
-              <Field label="AMTS (Abbreviated Mental Test Score) 0–10 — leer lassen wenn nicht getestet">
-                <input type="number" inputMode="numeric" min={0} max={10} value={form.delir_amts}
-                  onChange={e => set('delir_amts', e.target.value)} placeholder="0–10 (≤6 = eingeschränkt)"
-                  className={inp} />
-              </Field>
-              <p className="text-xs text-slate-400 leading-snug">
-                AMTS-Kurzfragen: Alter, Geburtsdatum, Uhrzeit (nahe Stunde), aktuelles Jahr, Klinikname,
-                zwei Personen erkennen, Adresse merken/wiederholen, 1. WK oder 2. WK Jahreszahl,
-                aktueller Kanzler/Bundespräsident (10 Fragen, 1 Punkt je korrekte Antwort)
-              </p>
-            </div>
-
-            <div className={clsx('rounded-2xl px-4 py-3 text-sm',
-              delirResult.level === 'high' ? 'bg-red-100 text-red-800' :
-              delirResult.level === 'intermediate' ? 'bg-amber-100 text-amber-800' :
-              'bg-green-100 text-green-800'
-            )}>
-              <strong>{delirResult.label}</strong>
-              <p className="text-xs mt-0.5 opacity-90">{delirResult.explanation}</p>
-            </div>
+              <div className={clsx('rounded-xl px-3 py-2.5 text-sm',
+                delirResult.level === 'high' ? 'bg-red-100 text-red-800' :
+                delirResult.level === 'intermediate' ? 'bg-amber-100 text-amber-800' :
+                'bg-green-100 text-green-800'
+              )}>
+                <strong>{delirResult.label}</strong>
+                <p className="text-xs mt-0.5 opacity-90">{delirResult.explanation}</p>
+              </div>
+            </CollapsibleSection>
           </>}
 
           {/* ── STEP 3: Vorgeschichte + Atemweg ─────────────────────────── */}
@@ -543,8 +573,13 @@ export default function PraeopEval() {
               )}
             </div>
 
-            <div className="bg-white rounded-2xl p-4 space-y-3 shadow-sm">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Familienanamnese — Anästhesie</p>
+            <CollapsibleSection
+              title="Familiäre Anästhesie-Anamnese"
+              defaultOpen={form.prev_familyMH || form.prev_familyPseudocholin || !!form.prev_familyOther}
+              badge={form.prev_familyMH
+                ? <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">⚠ MH</span>
+                : undefined}
+            >
               <CheckRow label="Maligne Hyperthermie (MH) in der Familie" checked={form.prev_familyMH}
                 onChange={v => set('prev_familyMH', v)} warn
                 description="Triggerfreie Anästhesie obligat — Dantrolene bereitstellen" />
@@ -555,7 +590,7 @@ export default function PraeopEval() {
                   onChange={e => set('prev_familyOther', e.target.value)}
                   placeholder="Freitext …" className={inp} />
               </Field>
-            </div>
+            </CollapsibleSection>
 
             <SecHeader title="Atemweg-Evaluation" color="blue" />
             <div className="bg-white rounded-2xl p-4 space-y-3 shadow-sm">
@@ -623,6 +658,76 @@ export default function PraeopEval() {
               )}>
                 Atemweg-Prognose: {awLabel.text}
               </div>
+            </div>
+
+            {/* Wilson Score */}
+            <SecHeader title="Wilson-Score (Schwierige Intubation)" color="indigo" />
+            <div className="bg-white rounded-2xl p-4 space-y-3 shadow-sm">
+              <p className="text-xs text-slate-500">Wilson et al. 1988 · Score ≥2 → Intubationsschwierigkeit möglich (Sens. ~75 %)</p>
+              {/* Auto-abgeleitete Items */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-slate-50 rounded-xl px-3 py-2 text-xs">
+                  <span className="text-slate-400 block">Gewicht</span>
+                  <span className="font-semibold text-slate-700">
+                    {!isNaN(weight)
+                      ? `${weight} kg → ${weight > 110 ? '2 Pkt.' : weight >= 90 ? '1 Pkt.' : '0 Pkt.'}`
+                      : '— (aus Schritt 1)'}
+                  </span>
+                </div>
+                <div className="bg-slate-50 rounded-xl px-3 py-2 text-xs">
+                  <span className="text-slate-400 block">HWS-Beweglichkeit</span>
+                  <span className="font-semibold text-slate-700">
+                    {form.aw_reklination
+                      ? `${form.aw_reklination === 'normal' ? '0 Pkt.' : form.aw_reklination === 'limited' ? '1 Pkt.' : '2 Pkt.'}`
+                      : '— (Reklination oben wählen)'}
+                  </span>
+                </div>
+              </div>
+              <Field label="Kieferbeweglichkeit (Interinzisaldistanz + Subluxation)">
+                <select value={form.aw_wilson_jaw} onChange={e => set('aw_wilson_jaw', e.target.value as FormState['aw_wilson_jaw'])} className={sel}>
+                  <option value="">– wählen –</option>
+                  <option value="0">0 — IG &gt;5 cm oder Subluxation möglich (0 Pkt.)</option>
+                  <option value="1">1 — IG &lt;5 cm oder keine Subluxation (1 Pkt.)</option>
+                  <option value="2">2 — IG &lt;5 cm UND keine Subluxation (2 Pkt.)</option>
+                </select>
+              </Field>
+              <Field label="Retrognathie / Retrognathe Mandibula">
+                <select value={form.aw_wilson_mandible} onChange={e => set('aw_wilson_mandible', e.target.value as FormState['aw_wilson_mandible'])} className={sel}>
+                  <option value="">– wählen –</option>
+                  <option value="0">0 — Normal (0 Pkt.)</option>
+                  <option value="1">1 — Moderat (1 Pkt.)</option>
+                  <option value="2">2 — Ausgeprägt (2 Pkt.)</option>
+                </select>
+              </Field>
+              <Field label="Schneidezähne vorstehend (Buck Teeth)">
+                <select value={form.aw_wilson_teeth} onChange={e => set('aw_wilson_teeth', e.target.value as FormState['aw_wilson_teeth'])} className={sel}>
+                  <option value="">– wählen –</option>
+                  <option value="0">0 — Normal (0 Pkt.)</option>
+                  <option value="1">1 — Moderat vorstehend (1 Pkt.)</option>
+                  <option value="2">2 — Stark vorstehend (2 Pkt.)</option>
+                </select>
+              </Field>
+              {wilsonResult.complete && (
+                <div className={clsx('rounded-xl px-3 py-2.5 flex items-center gap-3',
+                  wilsonR.level === 'low' ? 'bg-green-100' :
+                  wilsonR.level === 'intermediate' ? 'bg-amber-100' : 'bg-red-100'
+                )}>
+                  <span className={clsx('text-2xl font-bold',
+                    wilsonR.level === 'low' ? 'text-green-700' :
+                    wilsonR.level === 'intermediate' ? 'text-amber-700' : 'text-red-700'
+                  )}>{wilsonResult.score}</span>
+                  <div>
+                    <span className="text-xs text-slate-500">/ 10 Punkte</span>
+                    <p className={clsx('text-sm font-semibold mt-0.5',
+                      wilsonR.level === 'low' ? 'text-green-800' :
+                      wilsonR.level === 'intermediate' ? 'text-amber-800' : 'text-red-800'
+                    )}>{wilsonR.text}</p>
+                  </div>
+                </div>
+              )}
+              {!wilsonResult.complete && (
+                <p className="text-xs text-slate-400 italic">Score wird angezeigt, sobald ≥4 von 5 Kriterien ausgefüllt sind.</p>
+              )}
             </div>
           </>}
 
@@ -1003,35 +1108,49 @@ export default function PraeopEval() {
                 if (!grouped[item.category]) grouped[item.category] = []
                 grouped[item.category].push(item)
               })
+              const maxUrgency = (items: typeof assessmentItems) => {
+                if (items.some(i => i.urgency === 'critical')) return 'critical'
+                if (items.some(i => i.urgency === 'high')) return 'high'
+                if (items.some(i => i.urgency === 'medium')) return 'medium'
+                return 'info'
+              }
               return (
                 <div className="space-y-3">
-                  {Object.entries(grouped).map(([cat, items]) => (
-                    <div key={cat} className="bg-white rounded-2xl overflow-hidden shadow-sm">
-                      <div className="px-4 py-2.5 bg-slate-700">
-                        <p className="text-white text-xs font-bold uppercase tracking-wide">{cat}</p>
+                  {Object.entries(grouped).map(([cat, items]) => {
+                    const topUrgency = maxUrgency(items)
+                    return (
+                      <div key={cat} className="rounded-2xl overflow-hidden shadow-sm border border-slate-100">
+                        <div className={clsx('px-4 py-2.5 flex items-center gap-2',
+                          topUrgency === 'critical' ? 'bg-red-700' :
+                          topUrgency === 'high' ? 'bg-amber-600' :
+                          topUrgency === 'medium' ? 'bg-blue-700' : 'bg-slate-700'
+                        )}>
+                          {topUrgency === 'critical' && <AlertCircle className="w-3.5 h-3.5 text-white flex-shrink-0" />}
+                          {topUrgency === 'high' && <AlertTriangle className="w-3.5 h-3.5 text-white flex-shrink-0" />}
+                          <p className="text-white text-xs font-bold uppercase tracking-wide">{cat}</p>
+                        </div>
+                        <div className="divide-y divide-slate-100 bg-white">
+                          {items.map((item, i) => (
+                            <div key={i} className={clsx('px-4 py-3 flex items-start gap-3 border-l-4',
+                              item.urgency === 'critical' ? 'bg-red-50 border-l-red-600' :
+                              item.urgency === 'high' ? 'bg-amber-50 border-l-amber-500' :
+                              item.urgency === 'medium' ? 'bg-blue-50 border-l-blue-400' : 'bg-slate-50 border-l-slate-300'
+                            )}>
+                              {item.urgency === 'critical' && <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />}
+                              {item.urgency === 'high' && <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />}
+                              {item.urgency === 'medium' && <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />}
+                              {item.urgency === 'info' && <div className="w-1.5 h-1.5 rounded-full bg-slate-400 flex-shrink-0 mt-1.5" />}
+                              <span className={clsx('text-sm leading-snug',
+                                item.urgency === 'critical' ? 'text-red-900 font-bold' :
+                                item.urgency === 'high' ? 'text-amber-900 font-semibold' :
+                                item.urgency === 'medium' ? 'text-blue-900' : 'text-slate-700'
+                              )}>{item.text}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div className="divide-y divide-slate-100">
-                        {items.map((item, i) => (
-                          <div key={i} className={clsx('px-4 py-3 flex items-start gap-3',
-                            item.urgency === 'critical' ? 'bg-red-50' :
-                            item.urgency === 'high' ? 'bg-amber-50' :
-                            item.urgency === 'medium' ? 'bg-blue-50' : 'bg-slate-50'
-                          )}>
-                            <span className={clsx('w-2 h-2 rounded-full flex-shrink-0 mt-1.5',
-                              item.urgency === 'critical' ? 'bg-red-500' :
-                              item.urgency === 'high' ? 'bg-amber-500' :
-                              item.urgency === 'medium' ? 'bg-blue-500' : 'bg-slate-400'
-                            )} />
-                            <span className={clsx('text-sm leading-snug',
-                              item.urgency === 'critical' ? 'text-red-800 font-semibold' :
-                              item.urgency === 'high' ? 'text-amber-800 font-medium' :
-                              item.urgency === 'medium' ? 'text-blue-800' : 'text-slate-700'
-                            )}>{item.text}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )
             })()}

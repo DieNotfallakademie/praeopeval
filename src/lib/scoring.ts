@@ -43,6 +43,42 @@ export function difficultAirwayLabel(score: number): { level: 'low'|'intermediat
   return { level: 'high', text: 'Schwieriger Atemweg wahrscheinlich — erweiterte Vorbereitung obligat' }
 }
 
+// ── Wilson-Score (Schwierige Intubation) ─────────────────────────────────────
+export function calcWilsonScore(f: FormState, weight: number | null): {
+  score: number
+  complete: boolean
+  items: { name: string; pts: number | null }[]
+} {
+  const w = weight !== null && !isNaN(weight as number)
+    ? (weight > 110 ? 2 : weight >= 90 ? 1 : 0)
+    : null
+  const hnm = f.aw_reklination
+    ? (f.aw_reklination === 'very_limited' ? 2 : f.aw_reklination === 'limited' ? 1 : 0)
+    : null
+  const jaw = f.aw_wilson_jaw !== '' ? parseInt(f.aw_wilson_jaw) : null
+  const mandible = f.aw_wilson_mandible !== '' ? parseInt(f.aw_wilson_mandible) : null
+  const teeth = f.aw_wilson_teeth !== '' ? parseInt(f.aw_wilson_teeth) : null
+  const values = [w, hnm, jaw, mandible, teeth]
+  const defined = values.filter(v => v !== null) as number[]
+  return {
+    score: defined.reduce((a, b) => a + b, 0),
+    complete: defined.length >= 4,
+    items: [
+      { name: 'Gewicht', pts: w },
+      { name: 'HWS-Beweglichkeit', pts: hnm },
+      { name: 'Kieferbeweglichkeit', pts: jaw },
+      { name: 'Retrognathie', pts: mandible },
+      { name: 'Schneidezähne', pts: teeth },
+    ]
+  }
+}
+
+export function wilsonRisk(score: number): { level: 'low' | 'intermediate' | 'high'; text: string } {
+  if (score <= 1) return { level: 'low', text: 'Unauffällig — Intubationsschwierigkeit unwahrscheinlich' }
+  if (score <= 3) return { level: 'intermediate', text: 'Intubationsschwierigkeit möglich (Sens. ~75 %)' }
+  return { level: 'high', text: 'Intubationsschwierigkeit wahrscheinlich' }
+}
+
 // ── RCRI ──────────────────────────────────────────────────────────────────────
 export function calcRCRI(f: FormState): number {
   return [f.rcriHighRiskSurgery, f.rcriIschemicHD, f.rcriHeartFailure,
@@ -526,6 +562,7 @@ export function generateProtocolText(f: FormState): string {
   const today = new Date().toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' })
   const age = parseInt(f.age)
   const cr = parseFloat(f.creatinine), hb = parseFloat(f.hemoglobin)
+  const weight = parseFloat(f.weight)
   const egfr = !isNaN(cr) && !isNaN(age) && f.sex ? calcEGFR(cr, age, f.sex) : null
   const py = calcPackYears(f.nox_cigPerDay, f.nox_smokingYears)
   const rcri = calcRCRI(f)
@@ -548,13 +585,12 @@ export function generateProtocolText(f: FormState): string {
   L.push(`Datum: ${today}`)
   L.push(sep)
 
-  // Eingriff
-  L.push(f.surgeryDescription || 'Eingriff nicht angegeben')
+  // Eingriff (Risiko-Klassifikation, kein Freitext — dieser steht bereits im Protokoll)
   const riskLabel = f.surgicalRisk === 'low' ? 'NIEDRIG (<1 %)' :
     f.surgicalRisk === 'intermediate' ? 'MITTEL (1–5 %)' :
     f.surgicalRisk === 'high' ? 'HOCH (>5 %)' : ''
   const surParts = [
-    riskLabel && `Risiko: ${riskLabel}`,
+    riskLabel && `MACE-Risiko: ${riskLabel}`,
     f.functionalCapacity === 'poor' && 'METs <4 (eingeschränkt)',
     f.emergencyClass && f.emergencyClass !== 'elective' && `Dringlichkeit: ${f.emergencyClass}`,
   ].filter(Boolean)
@@ -643,6 +679,14 @@ export function generateProtocolText(f: FormState): string {
   ].filter(Boolean)
   if (physSigns.length) L.push(physSigns.join(', '))
   L.push(`→ ${awLabel.text}`)
+  // Wilson-Score
+  const wilson = calcWilsonScore(f, !isNaN(weight) ? weight : null)
+  if (wilson.complete) {
+    const wr = wilsonRisk(wilson.score)
+    L.push(`Wilson-Score: ${wilson.score}/10 — ${wr.text}`)
+  } else {
+    L.push('Wilson-Score: unvollständig (Gewicht, Reklination, Kiefer, Retrognathie, Schneidezähne)')
+  }
   if (f.aw_notes) L.push(`Notiz: ${f.aw_notes}`)
   L.push('')
 
@@ -691,16 +735,6 @@ export function generateProtocolText(f: FormState): string {
   L.push(`NÜCHTERNHEITSKARTE: ${FASTING_CARD_INFO[fc].label}`)
   L.push('')
 
-  // Empfehlungen
-  if (recs.length) {
-    L.push('EMPFEHLUNGEN')
-    recs.forEach(r => L.push(`• ${r}`))
-    L.push('')
-  }
-
-  L.push(sep)
-  L.push('ESC/ESA 2022 · DGAI/BDA 2024 · DGAI Anämie 2023 · notfallakademie.org')
-
   return L.join('\n')
 }
 
@@ -724,6 +758,13 @@ export function buildAssessmentItems(f: FormState, rcri: number, ariscat: number
   const awScore = difficultAirwayScore(f)
   if (awScore >= 3) items.push({ category: 'Atemweg', text: 'Schwieriger Atemweg erwartet: Videolaryngoskopie + fiberoptische Reserve + Awake-Intubation erwägen', urgency: 'critical' })
   else if (awScore >= 1.5) items.push({ category: 'Atemweg', text: 'Schwieriger Atemweg möglich: Videolaryngoskopie bereithalten', urgency: 'high' })
+
+  const w = parseFloat(f.weight)
+  const wilson = calcWilsonScore(f, !isNaN(w) ? w : null)
+  if (wilson.complete && wilson.score >= 2) {
+    const wr = wilsonRisk(wilson.score)
+    items.push({ category: 'Atemweg', text: `Wilson-Score ${wilson.score}/10: ${wr.text}`, urgency: wilson.score >= 4 ? 'high' : 'medium' })
+  }
 
   diags.filter(d => d.recommended).forEach(d => items.push({ category: 'Diagnostik', text: d.name, urgency: 'medium' }))
 

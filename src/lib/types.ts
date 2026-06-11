@@ -44,6 +44,11 @@ export interface FormState {
   aw_previousDifficult: boolean
   aw_notes: string
 
+  // ── Wilson-Score (Atemweg) ──────────────────────────────────────────────────
+  aw_wilson_jaw: '0' | '1' | '2' | ''       // Kieferbeweglichkeit + Subluxation
+  aw_wilson_mandible: '0' | '1' | '2' | ''  // Retrognathie
+  aw_wilson_teeth: '0' | '1' | '2' | ''     // Vorstehende Schneidezähne
+
   // ── Noxen ───────────────────────────────────────────────────────────────────
   nox_smoking: boolean
   nox_cigPerDay: string
@@ -57,8 +62,8 @@ export interface FormState {
 
   // ── Reflux / GERD ───────────────────────────────────────────────────────────
   reflux_heartburn: boolean
-  reflux_mealIndependent: boolean   // Reflux/Sodbrennen auch unabhängig von Mahlzeiten / in Ruhe
-  reflux_nocturnalCough: boolean    // Nächtliche Hustenanfälle oder Erwachen durch Reflux
+  reflux_mealIndependent: boolean
+  reflux_nocturnalCough: boolean
   reflux_atRest: boolean
   reflux_regurgitation: boolean
 
@@ -87,13 +92,13 @@ export interface FormState {
   cfs: number
 
   // ── Delirium-Risiko (ISAR + kognitive Baseline) ─────────────────────────────
-  delir_isar1: boolean   // Hilfe bei ADL vor Hospitalisation
-  delir_isar2: boolean   // Hospitalisation ≥1 Nacht in letzten 6 Monaten
-  delir_isar3: boolean   // Erhebliche Sehprobleme trotz Korrektur
-  delir_isar4: boolean   // Erhebliche Hörprobleme
-  delir_isar5: boolean   // Gedächtnisschwierigkeiten (vom Pat. berichtet)
-  delir_isar6: boolean   // ≥5 Medikamente täglich oder schwere Akuterkrankung
-  delir_amts: string     // Abbreviated Mental Test Score 0–10 (leer = nicht getestet)
+  delir_isar1: boolean
+  delir_isar2: boolean
+  delir_isar3: boolean
+  delir_isar4: boolean
+  delir_isar5: boolean
+  delir_isar6: boolean
+  delir_amts: string
   delir_knownDementia: boolean
   delir_prevDelirium: boolean
 
@@ -159,6 +164,7 @@ export const defaultFormState: FormState = {
   aw_mallampati: '', aw_mouthOpening: '', aw_tmd: '', aw_reklination: '',
   aw_ulbt: '', aw_beard: false, aw_shortNeck: false, aw_micrognathia: false,
   aw_obese: false, aw_previousDifficult: false, aw_notes: '',
+  aw_wilson_jaw: '', aw_wilson_mandible: '', aw_wilson_teeth: '',
   nox_smoking: false, nox_cigPerDay: '', nox_smokingYears: '', nox_exSmoker: false,
   nox_exSmokerSince: '', nox_alcohol: false, nox_alcoholGPerWeek: '', nox_drugs: false, nox_drugsText: '',
   reflux_heartburn: false, reflux_mealIndependent: false, reflux_nocturnalCough: false,
