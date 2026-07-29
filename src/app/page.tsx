@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import {
   Copy, Check, RotateCcw, ChevronLeft, ChevronRight, ChevronDown,
-  AlertCircle, AlertTriangle, Info, Pill, X, MessageSquare, Zap,
+  AlertCircle, AlertTriangle, Info, Pill, X, MessageSquare, Zap, FileText,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { FormState, defaultFormState } from '@/lib/types'
@@ -20,6 +20,7 @@ import {
   generateProtocolText, buildAssessmentItems,
   calcISAR, delirRisk,
   getCoagulationTiming, calcPediatricPremed,
+  calcApfel, apfelRisk,
 } from '@/lib/scoring'
 import MedicationSearch from '@/components/MedicationSearch'
 import DiagnosticsGuide from '@/components/DiagnosticsGuide'
@@ -79,6 +80,55 @@ function RiskBadge({ level, label }: { level: 'low' | 'intermediate' | 'high'; l
       level === 'intermediate' && 'bg-amber-100 text-amber-800',
       level === 'high' && 'bg-red-100 text-red-800',
     )}>{label}</span>
+  )
+}
+
+function ScoreTile({ label, value, max, level, sub }: {
+  label: string; value: string; max?: string; level: 'low' | 'intermediate' | 'high'; sub: string
+}) {
+  return (
+    <div className={clsx('rounded-xl px-3 py-2.5 border',
+      level === 'low' ? 'bg-green-50 border-green-200' :
+      level === 'intermediate' ? 'bg-amber-50 border-amber-200' :
+      'bg-red-50 border-red-200'
+    )}>
+      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">{label}</p>
+      <div className="flex items-baseline gap-1 mt-0.5">
+        <span className={clsx('text-xl font-bold',
+          level === 'low' ? 'text-green-700' : level === 'intermediate' ? 'text-amber-700' : 'text-red-700'
+        )}>{value}</span>
+        {max && <span className="text-xs text-slate-400">/ {max}</span>}
+      </div>
+      <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">{sub}</p>
+    </div>
+  )
+}
+
+function ProtocolLine({ line, isTitle }: { line: string; isTitle: boolean }) {
+  const trimmed = line.trim()
+  if (trimmed === '') return <div className="h-2.5" aria-hidden />
+  if (/^─{5,}$/.test(trimmed)) return <div className="border-t border-slate-200 my-1.5" aria-hidden />
+  if (isTitle) return <p className="text-sm font-bold text-slate-800 tracking-wide">{trimmed}</p>
+
+  const isSectionHeader = /^[A-ZÄÖÜß][A-ZÄÖÜß /&-]{2,}$/.test(trimmed) && !trimmed.includes(':')
+  if (isSectionHeader) {
+    return (
+      <p className="text-[11px] font-bold text-blue-700 tracking-wider mt-3 pb-1 border-b border-blue-100 first:mt-0">
+        {trimmed}
+      </p>
+    )
+  }
+
+  const isSubItem = line.startsWith('  →') || line.startsWith('  -')
+  const isConclusion = !isSubItem && trimmed.startsWith('→')
+  const hasWarning = line.includes('⚠')
+
+  return (
+    <p className={clsx('leading-relaxed',
+      isSubItem && 'pl-4 text-slate-500 italic',
+      isConclusion && 'font-semibold text-slate-700',
+      hasWarning && 'text-red-700 font-semibold',
+    )}>{trimmed}</p>
   )
 }
 
@@ -206,6 +256,7 @@ export default function PraeopEval() {
   const awLabel = useMemo(() => difficultAirwayLabel(awScore), [awScore])
   const wilsonResult = useMemo(() => calcWilsonScore(form, !isNaN(weight) ? weight : null), [form, weight])
   const wilsonR = useMemo(() => wilsonRisk(wilsonResult.score), [wilsonResult.score])
+  const apfel = useMemo(() => calcApfel(form), [form])
   const fastingCard = useMemo(() => determineFastingCard(form), [form])
   const protocolText = useMemo(() => generateProtocolText(form), [form])
   const assessmentItems = useMemo(() => buildAssessmentItems(form, rcri, ariscat, sbScore), [form, rcri, ariscat, sbScore])
@@ -1396,6 +1447,30 @@ export default function PraeopEval() {
               </div>
             )}
 
+            {/* Scores-Übersicht */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Scores-Übersicht</p>
+              <div className="grid grid-cols-2 gap-2.5">
+                <ScoreTile label="RCRI" value={String(rcri)} max="6" level={rcriR.level}
+                  sub={`${rcriR.pct} MACE-Risiko`} />
+                {ariscat !== null && ariscatR && (
+                  <ScoreTile label="ARISCAT" value={String(ariscat)} level={ariscatR.level}
+                    sub={`${ariscatR.pct} pulm. Risiko`} />
+                )}
+                <ScoreTile label="ISAR / Delir" value={String(isar)} max="6" level={delirResult.level}
+                  sub={delirResult.label} />
+                <ScoreTile label="STOP-BANG" value={String(sbScore)} max="8" level={sbR.level}
+                  sub={`OSA-Risiko ${sbR.label}`} />
+                <ScoreTile label="Atemweg-Score" value={awScore % 1 === 0 ? String(awScore) : awScore.toFixed(1)}
+                  level={awLabel.level} sub={awLabel.text} />
+                <ScoreTile label="Wilson-Score" value={wilsonResult.complete ? String(wilsonResult.score) : '–'}
+                  max="10" level={wilsonResult.complete ? wilsonR.level : 'intermediate'}
+                  sub={wilsonResult.complete ? wilsonR.text : 'Kriterien unvollständig (Atemweg-Schritt)'} />
+                <ScoreTile label="Apfel (PONV)" value={String(apfel.score)} max="4" level={apfel.level}
+                  sub={`${apfel.pct} PONV-Risiko`} />
+              </div>
+            </div>
+
             {/* Tab switcher */}
             <div className="flex gap-2 bg-white rounded-2xl p-1.5 shadow-sm">
               <button onClick={() => setResultTab('assessment')}
@@ -1479,17 +1554,27 @@ export default function PraeopEval() {
 
             {/* Protocol tab */}
             {resultTab === 'protocol' && (
-              <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
-                <div className="flex items-center justify-between px-4 py-3 bg-slate-800">
-                  <span className="text-white text-sm font-semibold">Protokolltext (Copy & Paste)</span>
+              <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-200">
+                <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-slate-700 to-slate-800">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-slate-300" />
+                    <div>
+                      <span className="text-white text-sm font-semibold block leading-tight">Protokolltext</span>
+                      <span className="text-slate-400 text-[11px] leading-tight">Für OP-Dokumentation · zum Einfügen</span>
+                    </div>
+                  </div>
                   <button onClick={copyProtocol}
-                    className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-white bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg transition-colors">
+                    className={clsx('flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors',
+                      copied ? 'bg-green-600 text-white' : 'text-slate-200 bg-white/10 hover:bg-white/20'
+                    )}>
                     {copied ? <><Check className="w-3.5 h-3.5" /> Kopiert!</> : <><Copy className="w-3.5 h-3.5" /> Kopieren</>}
                   </button>
                 </div>
-                <pre className="px-4 py-4 text-xs text-slate-700 font-mono leading-relaxed whitespace-pre-wrap">
-                  {protocolText}
-                </pre>
+                <div className="px-4 py-4 text-xs font-mono bg-slate-50">
+                  {protocolText.split('\n').map((line, i) => (
+                    <ProtocolLine key={i} line={line} isTitle={i === 0} />
+                  ))}
+                </div>
               </div>
             )}
 
