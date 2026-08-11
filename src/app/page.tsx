@@ -1362,9 +1362,9 @@ export default function PraeopEval() {
             </p>
 
             <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200">
-              <p className="text-xs font-semibold text-slate-600 mb-1">Standard-Nüchternzeiten Erwachsene (DGAI/BDA)</p>
+              <p className="text-xs font-semibold text-slate-600 mb-1">Standard-Nüchternzeiten Erwachsene (hausinterne Regelung)</p>
               <div className="text-xs text-slate-600 space-y-0.5">
-                <p>Klare Flüssigkeiten (ohne Alkohol/Fett/Partikel): bis <strong>2 h</strong> vor OP</p>
+                <p>Klare Flüssigkeiten (ohne Alkohol/Fett/Partikel): <strong>bis zum Abruf in den OP</strong></p>
                 <p>Leichte Mahlzeit (z.B. Weißbrot, Milch): bis <strong>6 h</strong> vor OP</p>
                 <p>Fettreiche/feste Mahlzeit: bis <strong>8 h</strong> vor OP</p>
               </div>
