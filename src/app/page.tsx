@@ -1361,6 +1361,15 @@ export default function PraeopEval() {
               Die Klassifikation erfolgt automatisch. Hier können weitere Kriterien ergänzt werden.
             </p>
 
+            <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200">
+              <p className="text-xs font-semibold text-slate-600 mb-1">Standard-Nüchternzeiten Erwachsene (DGAI/BDA)</p>
+              <div className="text-xs text-slate-600 space-y-0.5">
+                <p>Klare Flüssigkeiten (ohne Alkohol/Fett/Partikel): bis <strong>2 h</strong> vor OP</p>
+                <p>Leichte Mahlzeit (z.B. Weißbrot, Milch): bis <strong>6 h</strong> vor OP</p>
+                <p>Fettreiche/feste Mahlzeit: bis <strong>8 h</strong> vor OP</p>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <CheckRow label="Ileus / Subileus" checked={form.fast_ileus}
                 onChange={v => set('fast_ileus', v)} warn description="→ Rote Karte" />
